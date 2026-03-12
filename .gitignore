@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.turbo/
+
+# Environment
+.env*
+*.local
+
+# Testing
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App/Package specific
+apps/*/dist/
+apps/*/.turbo/
+packages/*/dist/
+packages/*/.turbo/
+apps/frontend/.vite/
+apps/backend/drizzle/

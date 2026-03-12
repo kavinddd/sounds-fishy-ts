@@ -1,0 +1,47 @@
+{
+  "name": "@sounds-fishy/backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:run": "vitest run",
+    "coverage": "vitest run --coverage",
+    "test:docker:up": "docker compose -f docker-compose.test.yml up -d",
+    "test:docker:down": "docker compose -f docker-compose.test.yml down"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.11",
+    "@sounds-fishy/shared": "workspace:*",
+    "drizzle-orm": "^0.39.0",
+    "hono": "^4.7.11",
+    "neverthrow": "^8.2.0",
+    "pino": "^10.3.1",
+    "postgres": "^3.4.6",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.5",
+    "@vitest/coverage-v8": "^2.1.8",
+    "dotenv": "^17.3.1",
+    "drizzle-kit": "^0.30.1",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.6.2",
+    "typescript-eslint": "^8.18.2",
+    "vitest": "^2.1.8"
+  }
+}
