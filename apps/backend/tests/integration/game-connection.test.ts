@@ -23,7 +23,7 @@ afterEach(() => {
 
 // region: test
 
-describe("Test io connection ", () => {
+describe("Test IO connection ", () => {
   it("can connect to server", async () => {
     const socket = await newSocket();
     expect(socket.connected).toBe(true);
@@ -75,9 +75,17 @@ describe("Test io connection ", () => {
   it("can chat", async () => {
     const p1 = await newSocket();
     const p2 = await newSocket();
-    const roomId = await createRoom([p1, p2]);
 
-    // TODO: chat feature
+    const message = "Hello World!";
+    p1.emit("room:chat", message);
+
+    await new Promise<void>(() => {
+      p2.once("room:chat", (chat) => {
+        const { message: received_message, from } = chat;
+        expect(received_message).eq(message);
+        expect(from).eq(p1.id);
+      });
+    });
   });
 });
 

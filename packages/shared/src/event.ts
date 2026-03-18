@@ -1,4 +1,4 @@
-import { RoomId } from "./domain";
+import { RoomId, SocketId } from "./domain";
 
 export type ClientToServerEvents = {
   "room:host": () => void;
@@ -12,7 +12,7 @@ export type ServerToClientEvents = {
   "room:hosted": (roomId: RoomId) => void;
   "room:joined": (roomId: RoomId) => void;
   "room:join_failed": (reason: string) => void;
-  "room:chat": (message: string) => void;
+  "room:chat": (chat: { message: string; from: SocketId }) => void;
   "game:state": () => void;
   "game:error": (reason: string) => void;
 };
