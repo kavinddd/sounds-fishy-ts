@@ -1,5 +1,5 @@
+import { IoServer } from "@sounds-fishy/shared";
 import { createMiddleware } from "hono/factory";
-import { IoServer } from ".";
 
 // Middleware to inject io server into context
 export const makeInjectIoServerMiddleware = (ioServer: IoServer) =>

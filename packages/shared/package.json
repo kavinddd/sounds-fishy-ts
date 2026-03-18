@@ -11,10 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.3",
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "socket.io-client": "^4.8.3",
     "zod": "^4.3.6"
   }
 }

@@ -1,16 +1,17 @@
 import { healthRoute, makeGameRoute, userRoute } from "./routes";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { logger } from "hono/logger";
-import { Server } from "socket.io";
+import { logger } from "./telemetry";
+import { logger as loggerMiddleware } from "hono/logger";
+import { mountIoServer } from "./game-server";
+// import { IoServer } from "../../../packages/shared/src";
+import { IoServer } from "@sounds-fishy/shared";
 
 export type AppServer = ReturnType<typeof makeApp>;
-export type IoServer = ReturnType<typeof makeIoServer>;
 export type NodeServer = ReturnType<typeof serve>;
 
 const makeApp = () => {
   const app = new Hono();
-
   return app;
 };
 
@@ -28,7 +29,7 @@ const gracefulShutdown = (server: NodeServer) => {
   process.on("SIGTERM", () => {
     server.close((err) => {
       if (err) {
-        console.error(err);
+        logger.error(`Server is stopping from error ${err}`);
         process.exit(1);
       }
       process.exit(0);
@@ -36,19 +37,18 @@ const gracefulShutdown = (server: NodeServer) => {
   });
 };
 
-export const makeIoServer = (server: NodeServer) => {
-  const ioServer = new Server(server);
-  return ioServer;
-};
+interface StartupParam {
+  port: number;
+}
 
-export const startup = (port: number) => {
+export const startup = ({ port }: StartupParam) => {
   const app = makeApp();
-  app.use("*", logger());
+  app.use("*", loggerMiddleware());
   console.log(`Server running on http://localhost:${port}`);
 
   const server = serve({ fetch: app.fetch, port: port });
-  const ioServer = makeIoServer(server);
+  const ioServer = mountIoServer(server);
   routeApp(app, ioServer);
   gracefulShutdown(server);
-  return { server, app };
+  return { server, app, ioServer };
 };
