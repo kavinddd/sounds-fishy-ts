@@ -1,11 +1,9 @@
 import { afterEach, afterAll, beforeAll, describe, it, expect } from "vitest";
 import { io } from "socket.io-client";
 import { RunningServer, unsafeRunServer } from "../utils/server";
-import { Chat, ClientSocket, RoomId } from "@sounds-fishy/shared";
+import { Chat, ClientSocket, IoSocket, RoomId } from "@sounds-fishy/shared";
 import { errAsync, ResultAsync } from "neverthrow";
-import { logger } from "../../src/telemetry";
 
-// region: set up
 let server: RunningServer;
 
 beforeAll(() => {
@@ -20,10 +18,6 @@ afterEach(() => {
   server.io.disconnectSockets(true);
 });
 
-// endregion
-
-// region: test
-
 describe("Test IO connection ", () => {
   it("can connect to server", async () => {
     const socket = await newSocket();
@@ -34,11 +28,12 @@ describe("Test IO connection ", () => {
     const socket = await newSocket();
     const roomId = await hostRoom(socket);
     expect(roomId.isOk()).toBe(true);
-    expect(server.io.sockets.adapter.rooms.has(socket.id!)).toBe(true);
-    expect(server.io.sockets.adapter.rooms.size === 2).toBe(true);
-    expect(server.io.sockets.adapter.rooms.has(roomId._unsafeUnwrap())).toBe(
-      true,
-    );
+
+    const [serverSocket] = await server.io.in(socket.id!).fetchSockets();
+    expect(serverSocket.data.state).toEqual({
+      status: "in-room",
+      roomId: roomId._unsafeUnwrap(),
+    });
   });
 
   it("cannot host multiple rooms", async () => {
@@ -47,6 +42,9 @@ describe("Test IO connection ", () => {
     const secondRoom = await hostRoom(socket);
     expect(firstRoom.isOk()).toBe(true);
     expect(secondRoom.isErr()).toBe(true);
+
+    const [serverSocket] = await server.io.in(socket.id!).fetchSockets();
+    expect(serverSocket.data.state.status).toBe("in-room");
   });
 
   it("can join a room", async () => {
@@ -55,6 +53,12 @@ describe("Test IO connection ", () => {
     const joiner = await newSocket();
     const joining = await joinRoom(joiner, roomId);
     expect(joining.isOk());
+
+    const [serverSocket] = await server.io.in(joiner.id!).fetchSockets();
+    expect(serverSocket.data.state).toEqual({
+      status: "in-room",
+      roomId,
+    });
   });
 
   it("cannot join multiple rooms", async () => {
@@ -71,6 +75,53 @@ describe("Test IO connection ", () => {
 
     expect(joiningFirstRoom.isOk()).toBe(true);
     expect(joiningSecondRoom.isErr()).toBe(true);
+
+    const [serverSocket] = await server.io.in(joiner.id!).fetchSockets();
+    expect(serverSocket.data.state).toEqual({
+      status: "in-room",
+      roomId: firstRoomId,
+    });
+  });
+
+  it("can host a new room after leaving the old one", async () => {
+    const socket = await newSocket();
+
+    const firstRoom = await hostRoom(socket);
+    expect(firstRoom.isOk()).toBe(true);
+
+    await leaveRoom(socket);
+
+    const secondRoom = await hostRoom(socket);
+    expect(secondRoom.isOk()).toBe(true);
+    expect(secondRoom._unsafeUnwrap()).not.toBe(firstRoom._unsafeUnwrap());
+
+    const [serverSocket] = await server.io.in(socket.id!).fetchSockets();
+    expect(serverSocket.data.state).toEqual({
+      status: "in-room",
+      roomId: secondRoom._unsafeUnwrap(),
+    });
+  });
+
+  it("can join a new room after leaving the old one", async () => {
+    const host = await newSocket();
+    const roomId = (await hostRoom(host))._unsafeUnwrap();
+
+    const joiner = await newSocket();
+    await joinRoom(joiner, roomId);
+
+    await leaveRoom(joiner);
+
+    const secondHost = await newSocket();
+    const secondRoomId = (await hostRoom(secondHost))._unsafeUnwrap();
+
+    const joining = await joinRoom(joiner, secondRoomId);
+    expect(joining.isOk()).toBe(true);
+
+    const [serverSocket] = await server.io.in(joiner.id!).fetchSockets();
+    expect(serverSocket.data.state).toEqual({
+      status: "in-room",
+      roomId: secondRoomId,
+    });
   });
 
   it("can chat", async () => {
@@ -91,10 +142,6 @@ describe("Test IO connection ", () => {
     expect(chat.message).toEqual(message);
   });
 });
-
-// endregion
-
-// region: helpers
 
 // host a room where the socket is a host
 const hostRoom = (socket: ClientSocket): ResultAsync<RoomId, string> => {
@@ -119,6 +166,14 @@ const joinRoom = (
   return ResultAsync.fromPromise(promise, (e) => e as string);
 };
 
+// leave the current room
+const leaveRoom = (socket: ClientSocket): Promise<void> => {
+  return new Promise((resolve) => {
+    socket.emit("room:leave");
+    setTimeout(resolve, 50);
+  });
+};
+
 // create a socket.io connection to a localhost server (for testing purpose)
 const newSocket = async (): Promise<ClientSocket> => {
   const socket = io(`http://localhost:${server.address.port}`);
@@ -136,5 +191,3 @@ const createRoom = (sockets: ClientSocket[]): ResultAsync<RoomId, string> => {
     await Promise.all(joiners.map((j) => joinRoom(j, roomId)));
   });
 };
-
-// endregion
