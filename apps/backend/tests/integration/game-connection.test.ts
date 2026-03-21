@@ -1,8 +1,9 @@
 import { afterEach, afterAll, beforeAll, describe, it, expect } from "vitest";
 import { io } from "socket.io-client";
 import { RunningServer, unsafeRunServer } from "../utils/server";
-import { ClientSocket, RoomId } from "@sounds-fishy/shared";
+import { Chat, ClientSocket, RoomId } from "@sounds-fishy/shared";
 import { errAsync, ResultAsync } from "neverthrow";
+import { logger } from "../../src/telemetry";
 
 // region: set up
 let server: RunningServer;
@@ -76,16 +77,18 @@ describe("Test IO connection ", () => {
     const p1 = await newSocket();
     const p2 = await newSocket();
 
+    const _ = (await createRoom([p1, p2]))._unsafeUnwrap();
+
     const message = "Hello World!";
+
     p1.emit("room:chat", message);
 
-    await new Promise<void>(() => {
-      p2.once("room:chat", (chat) => {
-        const { message: received_message, from } = chat;
-        expect(received_message).eq(message);
-        expect(from).eq(p1.id);
-      });
-    });
+    const chat = await new Promise<Chat>((resolve) =>
+      p2.once("room:chat", resolve),
+    );
+
+    expect(chat.from).toBe(p1.id);
+    expect(chat.message).toEqual(message);
   });
 });
 

@@ -6,9 +6,26 @@ import {
   ServerToClientEvents,
 } from "./event";
 
+export type SocketState =
+  | {
+      status: "idle";
+    }
+  | {
+      status: "in-room";
+      roomId: RoomId;
+    }
+  | {
+      status: "in-game";
+      roomId: RoomId;
+    };
+
+export type RoomState = { id: RoomId; hostId: SocketId; players: SocketId[] };
+
+export type GameState = { round: number };
+
 export type SocketData = {
   id: SocketId;
-  roomId?: RoomId;
+  state: SocketState;
 };
 
 export type IoServer = Server<
