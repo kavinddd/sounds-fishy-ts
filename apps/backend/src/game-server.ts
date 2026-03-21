@@ -14,7 +14,13 @@ import { logger } from "./telemetry";
 export type { IoServer } from "@sounds-fishy/shared";
 
 export const mountIoServer = (server: NodeServer) => {
-  const ioServer: IoServer = new Server(server);
+  const ioServer: IoServer = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"],
+    },
+  });
+  // TODO: Prod config - restrict CORS origin to specific domains
   attachIoServerEventListeners(ioServer);
   return ioServer;
 };
