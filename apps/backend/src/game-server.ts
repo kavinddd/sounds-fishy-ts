@@ -123,9 +123,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return;
       }
 
-      socket
-        .to(socket.data.state.roomId)
-        .emit("room:chat", { message, from: socket.id as SocketId });
+      const chat = { message, from: socket.id as SocketId };
+      socket.to(socket.data.state.roomId).emit("room:chat", chat);
+      socket.emit("room:chat", chat);
     });
 
     // endregion
