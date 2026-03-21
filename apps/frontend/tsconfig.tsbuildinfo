@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts"],"version":"5.6.3"}
+{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/Bubbles.tsx","./src/components/Button.tsx","./src/components/HomePage.tsx","./src/components/Input.tsx","./src/components/RoomPage.tsx","./src/components/index.ts","./src/context/SocketContext.tsx","./src/hooks/useSocket.ts"],"version":"5.6.3"}

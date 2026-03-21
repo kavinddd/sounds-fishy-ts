@@ -1,22 +1,24 @@
-import type { ApiResponse, User } from "@sounds-fishy/shared";
+import { SocketProvider } from "./context/SocketContext";
+import { useSocket } from "./hooks/useSocket";
+import { HomePage } from "./components/HomePage";
+import { RoomPage } from "./components/RoomPage";
+
+function AppContent() {
+  const { status } = useSocket();
+
+  if (status === "in-room") {
+    return <RoomPage />;
+  }
+
+  return <HomePage />;
+}
 
 function App() {
-  const response: ApiResponse<User> = {
-    data: {
-      id: "1",
-      name: "Test User",
-      email: "test@example.com",
-    },
-    message: "Hello from shared types!",
-  };
-
   return (
-    <div>
-      <h1>Sounds Fishy</h1>
-      <pre>{JSON.stringify(response, null, 2)}</pre>
-    </div>
+    <SocketProvider>
+      <AppContent />
+    </SocketProvider>
   );
 }
 
 export default App;
-

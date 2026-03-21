@@ -1,23 +1,39 @@
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #7dd3fc;
+  --color-primary-dark: #38bdf8;
+  --color-secondary: #e0f2fe;
+  --color-accent: #0ea5e9;
+  --color-background: #f0f9ff;
+  --color-surface: #ffffff;
+  --color-text: #0c4a6e;
+  --color-text-light: #64748b;
+  --font-family-sans: "Nunito", system-ui, sans-serif;
+  --font-family-display: "Fredoka", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  min-width: 320px;
   min-height: 100vh;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.font-display {
+  font-family: var(--font-family-display);
+}
+
+@keyframes bubble {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.animate-bubble {
+  animation: bubble 2s ease-in-out infinite;
 }
