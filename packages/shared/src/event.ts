@@ -1,4 +1,5 @@
 import { RoomId, SocketId } from "./domain";
+import { ClientGameState, GameState, Role } from "./io";
 
 export type ClientToServerEvents = {
   "room:host": () => void;
@@ -13,7 +14,7 @@ export type ServerToClientEvents = {
   "room:joined": (roomId: RoomId) => void;
   "room:join_failed": (reason: string) => void;
   "room:chat": (chat: Chat) => void;
-  "game:state": () => void;
+  "game:state": <R extends Role>(gameState: ClientGameState<R>) => void;
   "game:error": (reason: string) => void;
 };
 

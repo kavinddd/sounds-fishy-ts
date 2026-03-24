@@ -1,8 +1,26 @@
-import { afterEach, afterAll, beforeAll, describe, it, expect } from "vitest";
+import {
+  afterEach,
+  afterAll,
+  beforeAll,
+  describe,
+  it,
+  expect,
+  assert,
+} from "vitest";
 import { io } from "socket.io-client";
 import { RunningServer, unsafeRunServer } from "../utils/server";
-import { Chat, ClientSocket, IoSocket, RoomId } from "@sounds-fishy/shared";
+import {
+  Chat,
+  ClientSocket,
+  IoSocket,
+  RoomId,
+  RoomState,
+  SocketId,
+} from "@sounds-fishy/shared";
 import { errAsync, ResultAsync } from "neverthrow";
+import { rooms, sockets } from "../../src/store";
+import { Socket } from "socket.io";
+import { start } from "repl";
 
 let server: RunningServer;
 
@@ -16,6 +34,8 @@ afterAll(() => {
 
 afterEach(() => {
   server.io.disconnectSockets(true);
+  rooms.clear();
+  sockets.clear();
 });
 
 describe("Test IO connection ", () => {
@@ -29,8 +49,10 @@ describe("Test IO connection ", () => {
     const roomId = await hostRoom(socket);
     expect(roomId.isOk()).toBe(true);
 
-    const [serverSocket] = await server.io.in(socket.id!).fetchSockets();
-    expect(serverSocket.data.state).toEqual({
+    const socketState = await sockets.get(socket.id! as SocketId);
+
+    expect(socketState.isOk());
+    expect(socketState._unsafeUnwrap()).toEqual({
       status: "in-room",
       roomId: roomId._unsafeUnwrap(),
     });
@@ -43,8 +65,10 @@ describe("Test IO connection ", () => {
     expect(firstRoom.isOk()).toBe(true);
     expect(secondRoom.isErr()).toBe(true);
 
-    const [serverSocket] = await server.io.in(socket.id!).fetchSockets();
-    expect(serverSocket.data.state.status).toBe("in-room");
+    const socketState = await sockets.get(socket.id! as SocketId);
+
+    expect(socketState.isOk());
+    expect(socketState._unsafeUnwrap().status).toEqual("in-room");
   });
 
   it("can join a room", async () => {
@@ -54,8 +78,10 @@ describe("Test IO connection ", () => {
     const joining = await joinRoom(joiner, roomId);
     expect(joining.isOk());
 
-    const [serverSocket] = await server.io.in(joiner.id!).fetchSockets();
-    expect(serverSocket.data.state).toEqual({
+    const socketState = await sockets.get(socket.id! as SocketId);
+
+    expect(socketState.isOk());
+    expect(socketState._unsafeUnwrap()).toEqual({
       status: "in-room",
       roomId,
     });
@@ -76,8 +102,10 @@ describe("Test IO connection ", () => {
     expect(joiningFirstRoom.isOk()).toBe(true);
     expect(joiningSecondRoom.isErr()).toBe(true);
 
-    const [serverSocket] = await server.io.in(joiner.id!).fetchSockets();
-    expect(serverSocket.data.state).toEqual({
+    const socketState = await sockets.get(firstHost.id! as SocketId);
+
+    expect(socketState.isOk());
+    expect(socketState._unsafeUnwrap()).toEqual({
       status: "in-room",
       roomId: firstRoomId,
     });
@@ -92,11 +120,15 @@ describe("Test IO connection ", () => {
     await leaveRoom(socket);
 
     const secondRoom = await hostRoom(socket);
+
+    const socketState = await sockets.get(socket.id! as SocketId);
+
+    console.log(secondRoom);
     expect(secondRoom.isOk()).toBe(true);
     expect(secondRoom._unsafeUnwrap()).not.toBe(firstRoom._unsafeUnwrap());
 
-    const [serverSocket] = await server.io.in(socket.id!).fetchSockets();
-    expect(serverSocket.data.state).toEqual({
+    expect(socketState.isOk());
+    expect(socketState._unsafeUnwrap()).toEqual({
       status: "in-room",
       roomId: secondRoom._unsafeUnwrap(),
     });
@@ -117,8 +149,10 @@ describe("Test IO connection ", () => {
     const joining = await joinRoom(joiner, secondRoomId);
     expect(joining.isOk()).toBe(true);
 
-    const [serverSocket] = await server.io.in(joiner.id!).fetchSockets();
-    expect(serverSocket.data.state).toEqual({
+    const socketState = (
+      await sockets.get(joiner.id! as SocketId)
+    )._unsafeUnwrap();
+    expect(socketState).toEqual({
       status: "in-room",
       roomId: secondRoomId,
     });
@@ -140,6 +174,41 @@ describe("Test IO connection ", () => {
 
     expect(chat.from).toBe(p1.id);
     expect(chat.message).toEqual(message);
+  });
+
+  it("can start game", async () => {
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const p3 = await newSocket();
+    const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+    const startingGame = await startGame(p1);
+
+    const room = (await rooms.get(roomId))._unsafeUnwrap();
+    assert(room.isPlaying, "Room is not playing");
+    expect(room.game).toBeDefined();
+    expect(room.game.questionHistory.size).toEqual(1);
+    expect(Object.values(room.game.roles).length).toEqual(3);
+    expect(startingGame.isOk()).toBe(true);
+  });
+
+  it("cannot start game if player is less then minimum", async () => {
+    const p1 = await newSocket();
+    const _ = (await createRoom([p1]))._unsafeUnwrap();
+
+    const startingGame = await startGame(p1);
+
+    expect(startingGame.isErr()).toBe(true);
+  });
+
+  it("cannot start game by joiners", async () => {
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const _ = (await createRoom([p1, p2]))._unsafeUnwrap();
+
+    const startingGame = await startGame(p2);
+
+    expect(startingGame.isErr()).toBe(true);
   });
 });
 
@@ -190,4 +259,15 @@ const createRoom = (sockets: ClientSocket[]): ResultAsync<RoomId, string> => {
   return hostRoom(host).andTee(async (roomId) => {
     await Promise.all(joiners.map((j) => joinRoom(j, roomId)));
   });
+};
+
+const startGame = (socket: ClientSocket): ResultAsync<void, string> => {
+  return ResultAsync.fromPromise(
+    new Promise<void>((resolve, reject) => {
+      socket.once("game:error", reject);
+      socket.once("game:state", () => resolve());
+      socket.emit("game:start");
+    }),
+    (err) => "Failed to start game " + err,
+  );
 };

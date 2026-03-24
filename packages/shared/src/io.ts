@@ -19,13 +19,39 @@ export type SocketState =
       roomId: RoomId;
     };
 
-export type RoomState = { id: RoomId; hostId: SocketId; players: SocketId[] };
+export type RoomState = {
+  id: RoomId;
+  hostId: SocketId;
+  players: SocketId[];
+} & ({ isPlaying: false } | { isPlaying: true; game: GameState });
 
-export type GameState = { round: number };
+export type Role = ClientGameState["role"];
+
+// game state for backend
+export type GameState = {
+  round: number;
+  question: string;
+  answer: string;
+  questionHistory: Set<String>;
+  roles: Record<SocketId, Role>;
+};
+
+// game state for frontend (per role)
+export type ClientGameState = (
+  | { role: "master" }
+  | { role: "red"; answer: string }
+  | { role: "blue"; answer: string }
+) &
+  BaseClientGameState;
+
+type BaseClientGameState = {
+  round: number;
+  question: string;
+};
 
 export type SocketData = {
   id: SocketId;
-  state: SocketState;
+  // state: SocketState;
 };
 
 export type IoServer = Server<
