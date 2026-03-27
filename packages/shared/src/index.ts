@@ -1,8 +1,8 @@
-export * from "./domain.js";
-export * from "./event.js";
-export * from "./io.js";
-export * from "./client.js";
-export * from "./api.js";
+export * from "./domain.ts";
+export * from "./event.ts";
+export * from "./io.ts";
+export * from "./client.ts";
+export * from "./api.ts";
 
 export interface User {
   id: string;
