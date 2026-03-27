@@ -2,11 +2,15 @@ import { Server } from "socket.io";
 import { v4 as uuid } from "uuid";
 import { NodeServer } from "./startup";
 import {
+  ackErr,
+  ackOk,
   ClientGameState,
+  ClientState,
   IoServer,
   Role,
   RoomId,
-  RoomState,
+  ServerGameState,
+  ServerState,
   SocketId,
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
@@ -48,29 +52,29 @@ const attachIoServerEventListeners = (io: IoServer) => {
         () => sockets.del(socket.data.id),
         (_) => logger.error("Failed to delete state due to no state stored"),
       );
+
+      // TODO: clean up rooms state
     });
     // endregion
 
     // region: room events
 
-    socket.on("room:host", async () => {
+    socket.on("room:host", async (ack) => {
       const stateResult = await sockets.get(socket.data.id);
+
       if (stateResult.isErr()) {
-        socket.emit("game:error", stateResult.error);
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
 
       const state = stateResult.value;
 
       if (state.status === "in-room") {
         logger.info(`Socket ${socket.id} failed to host, already in a room`);
-        socket.emit("room:join_failed", "Already in a room");
-        return;
+        return ack(ackErr("IN_ROOM"));
       }
 
       const newRoomId = uuid() as RoomId;
       socket.join(newRoomId);
-      socket.emit("room:hosted", newRoomId);
 
       sockets.set(socket.id as SocketId, {
         status: "in-room",
@@ -83,26 +87,23 @@ const attachIoServerEventListeners = (io: IoServer) => {
         players: [socket.id as SocketId],
         isPlaying: false,
       });
+
+      return ack(ackOk(newRoomId));
+      // return ack(ackOk());
     });
 
-    socket.on("room:join", async (roomId: RoomId) => {
+    socket.on("room:join", async (roomId, ack) => {
       const stateResult = await sockets.get(socket.data.id);
 
       if (stateResult.isErr()) {
-        socket.emit("game:error", stateResult.error);
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
+
       const state = stateResult.value;
 
-      if (state.status === "in-room") {
-        logger.info(`Socket ${socket.id} failed to host, already in a room`);
-        socket.emit("room:join_failed", "Already in a room");
-        return;
-      }
       if (["in-room", "in-game"].includes(state.status)) {
         logger.info(`Socket ${socket.id} failed to join, already in a room`);
-        socket.emit("room:join_failed", "already in a room.");
-        return;
+        return ack(ackErr("IN_ROOM"));
       }
 
       const roomResult = await rooms.get(roomId);
@@ -111,8 +112,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         logger.info(
           `Socket ${socket.id} failed to join, room ${roomId} doesn't exist`,
         );
-        socket.emit("room:join_failed", "The room does not exist.");
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
 
       const room = roomResult.value;
@@ -121,11 +121,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
         logger.info(
           `Socket ${socket.id} failed to join, room ${roomId} is playing`,
         );
-        socket.emit("room:join_failed", "The room is now playing.");
-        return;
+        return ack(ackErr("IN_GAME"));
       }
 
-      socket.emit("room:joined", roomId);
       socket.join(roomId);
 
       rooms.set(roomId, {
@@ -137,14 +135,15 @@ const attachIoServerEventListeners = (io: IoServer) => {
         status: "in-room",
         roomId,
       });
+
+      return ack(ackOk());
     });
 
-    socket.on("room:leave", async () => {
+    socket.on("room:leave", async (ack) => {
       const stateResult = await sockets.get(socket.data.id);
 
       if (stateResult.isErr()) {
-        socket.emit("game:error", stateResult.error);
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
       const state = stateResult.value;
 
@@ -152,7 +151,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         logger.info(
           "Failed to leave room because the socket is not in any room",
         );
-        return;
+        return ack(ackErr("NO_ROOM"));
       }
 
       const roomResult = await rooms.get(state.roomId);
@@ -161,7 +160,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         logger.info(
           `Failed to leave room because the room ${state.roomId} doesn't exist`,
         );
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
 
       const room = roomResult.value;
@@ -172,89 +171,74 @@ const attachIoServerEventListeners = (io: IoServer) => {
         players: [...room.players].filter((p) => p !== socket.id),
       });
       sockets.set(socket.data.id, { status: "idle" });
+
+      return ack(ackOk());
     });
 
-    socket.on("room:chat", async (message) => {
+    socket.on("room:chat", async (message, ack) => {
       const stateResult = await sockets.get(socket.data.id);
 
       if (stateResult.isErr()) {
-        socket.emit("game:error", stateResult.error);
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
+
       const state = stateResult.value;
 
       if (state.status === "idle") {
         logger.info("Failed to chat, the socket is idling");
-        return;
+        return ack(ackErr("NO_ROOM"));
       }
 
       const chat = { message, from: socket.id as SocketId };
       socket.to(state.roomId).emit("room:chat", chat);
       socket.emit("room:chat", chat);
+      return ack(ackOk());
     });
 
     // endregion
 
     // region: game events
-
-    socket.on("game:start", async () => {
+    socket.on("game:start", async (ack) => {
       const stateResult = await sockets.get(socket.data.id);
 
       if (stateResult.isErr()) {
-        socket.emit("game:error", stateResult.error);
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
 
       const state = stateResult.value;
 
       if (state.status !== "in-room") {
-        socket.emit(
-          "game:error",
-          "Failed to start game, the user is not in the room.",
-        );
-        logger.info("Failed to start game, the user is not in the room.");
-        return;
+        return ack(ackErr("NO_ROOM"));
       }
 
       const roomResult = await rooms.get(state.roomId);
 
       if (roomResult.isErr()) {
-        socket.emit(
-          "game:error",
-          "Failed to start game, unable to fetch room state.",
-        );
-        logger.info(
-          `Failed to leave room because the room ${state.roomId} doesn't exist`,
-        );
-        return;
+        return ack(ackErr("UNEXPECTED"));
       }
 
       const room = roomResult.value;
+
+      if (room.isPlaying) {
+        return ack(ackErr("IN_GAME"));
+      }
+
+      if (room.hostId !== socket.data.id) {
+        return ack(ackErr("NOT_HOST"));
+      }
 
       const assigingPlayerRoles = generateRoles(room.players.length).map(
         (roles) => assignRolesToPlayers(room.players, roles),
       );
 
       if (assigingPlayerRoles.isErr()) {
-        logger.info(`Failed to assign roles, ${assigingPlayerRoles.error}`);
-        socket.emit(
-          "game:error",
-          `Failed to assign roles, ${assigingPlayerRoles.error}`,
-        );
-        return;
+        return ack(ackErr("NOT_ENOUGH"));
       }
 
       const roles = assigingPlayerRoles.value;
-      const [question, answer] = randomQuestion();
+      const [question, answer] = randomProblem();
 
-      if (room.isPlaying) {
-        socket.emit(
-          "game:error",
-          `Failed to start the game, the game has started.`,
-        );
-      }
-
-      const newRoom: RoomState = {
+      const newRoom: ServerState = {
         ...room,
         isPlaying: true,
         game: {
@@ -267,7 +251,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
       };
 
       await broadcastGameState(newRoom, io).match(
-        () => logger.info("Broadcasted game states"),
+        () => logger.info("Broadcasted game states."),
         (err) => {
           logger.info(`Failed to brodcast game state, ${err}`);
         },
@@ -278,6 +262,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
         status: "in-game",
         roomId: state.roomId,
       });
+
+      return ack(ackOk());
     });
 
     // endregion
@@ -290,12 +276,12 @@ const questions: Array<[string, string]> = [
   ["In what country did sushi originate?", "China"],
 ];
 
-const randomQuestion = (exclude?: Set<String>): [string, string] => {
+const randomProblem = (exclude?: Set<string>): [string, string] => {
   return questions[randomInt(0, questions.length - 1)];
 };
 
 const broadcastGameState = (
-  room: RoomState,
+  room: ServerState,
   io: IoServer,
 ): ResultAsync<void, string> => {
   if (!room.isPlaying) {
@@ -309,22 +295,44 @@ const broadcastGameState = (
     () => "Failed to fetch sockets while broadcasting.",
   ).andThen((sockets) => {
     sockets.forEach((s) => {
-      const state = makeClientGameState(s.id as SocketId, room);
-      s.emit("game:state", state);
+      const state = makeClientState(s.id as SocketId, room);
+      s.emit("room:sync", state);
     });
 
     return okAsync();
   });
 };
 
-const makeClientGameState = (
+const makeClientState = (
   socketId: SocketId,
-  room: RoomState,
-): ClientGameState => {
-  if (!room.isPlaying) throw Error("should not happen");
+  room: ServerState,
+): ClientState => {
+  const state: ClientState = {
+    id: room.id,
+    isPlaying: false,
+    hostId: room.hostId,
+    players: room.players,
+  };
+
+  if (!room.isPlaying) {
+    return state;
+  }
 
   const role = room.game.roles[socketId];
-  const { question, round, answer } = room.game;
+  const game = makeGameClientState(role, room.game);
+
+  return {
+    ...state,
+    isPlaying: true,
+    game,
+  };
+};
+
+const makeGameClientState = (
+  role: Role,
+  game: ServerGameState,
+): ClientGameState => {
+  const { question, round, answer } = game;
 
   switch (role) {
     case "master": {

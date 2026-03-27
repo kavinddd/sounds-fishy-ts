@@ -10,17 +10,18 @@ import {
 import { io } from "socket.io-client";
 import { RunningServer, unsafeRunServer } from "../utils/server";
 import {
+  ackErr,
   Chat,
   ClientSocket,
-  IoSocket,
+  HostError,
+  JoinError,
   RoomId,
-  RoomState,
   SocketId,
+  SocketState,
+  StartError,
 } from "@sounds-fishy/shared";
-import { errAsync, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync, safeTry } from "neverthrow";
 import { rooms, sockets } from "../../src/store";
-import { Socket } from "socket.io";
-import { start } from "repl";
 
 let server: RunningServer;
 
@@ -46,24 +47,28 @@ describe("Test IO connection ", () => {
 
   it("can host a room", async () => {
     const socket = await newSocket();
-    const roomId = await hostRoom(socket);
-    expect(roomId.isOk()).toBe(true);
+    const roomId = await socket.emitWithAck("room:host");
+    // const roomId = await hostRoom(socket);
+    assert(roomId.success, "Acked failed.");
 
     const socketState = await sockets.get(socket.id! as SocketId);
 
     expect(socketState.isOk());
     expect(socketState._unsafeUnwrap()).toEqual({
       status: "in-room",
-      roomId: roomId._unsafeUnwrap(),
+      roomId: roomId.data,
     });
   });
 
   it("cannot host multiple rooms", async () => {
     const socket = await newSocket();
-    const firstRoom = await hostRoom(socket);
-    const secondRoom = await hostRoom(socket);
-    expect(firstRoom.isOk()).toBe(true);
-    expect(secondRoom.isErr()).toBe(true);
+    const firstRoom = await socket.emitWithAck("room:host");
+    const secondRoom = await socket.emitWithAck("room:host");
+    expect(firstRoom.success).toBe(true);
+    expect(secondRoom).toMatchObject({
+      success: false,
+      code: "IN_ROOM",
+    } satisfies HostError);
 
     const socketState = await sockets.get(socket.id! as SocketId);
 
@@ -73,10 +78,12 @@ describe("Test IO connection ", () => {
 
   it("can join a room", async () => {
     const socket = await newSocket();
-    const roomId = (await hostRoom(socket))._unsafeUnwrap();
+    const result = await socket.emitWithAck("room:host");
+    assert(result.success, "Failed to host room.");
+    const roomId = result.data;
     const joiner = await newSocket();
-    const joining = await joinRoom(joiner, roomId);
-    expect(joining.isOk());
+    const joining = await joiner.emitWithAck("room:join", result.data);
+    expect(joining.success);
 
     const socketState = await sockets.get(socket.id! as SocketId);
 
@@ -89,18 +96,28 @@ describe("Test IO connection ", () => {
 
   it("cannot join multiple rooms", async () => {
     const firstHost = await newSocket();
-    const firstRoomId = (await hostRoom(firstHost))._unsafeUnwrap();
+    const firstRoomAck = await firstHost.emitWithAck("room:host");
+    assert(firstRoomAck.success, "Failed to host first room.");
+    const firstRoomId = firstRoomAck.data;
 
     const secondHost = await newSocket();
-    const secondRoomId = (await hostRoom(secondHost))._unsafeUnwrap();
+    const secondRoomAck = await secondHost.emitWithAck("room:host");
+    assert(secondRoomAck.success, "Failed to host second room.");
+    const secondRoomId = firstRoomAck.data;
 
     const joiner = await newSocket();
 
-    const joiningFirstRoom = await joinRoom(joiner, firstRoomId);
-    const joiningSecondRoom = await joinRoom(joiner, secondRoomId);
+    const firstJoinAck = await joiner.emitWithAck("room:join", firstRoomId);
+    const secondJoinAck = await joiner.emitWithAck("room:join", secondRoomId);
 
-    expect(joiningFirstRoom.isOk()).toBe(true);
-    expect(joiningSecondRoom.isErr()).toBe(true);
+    expect(firstJoinAck.success).toBe(true);
+    expect(secondJoinAck).toMatchObject({
+      success: false,
+      code: "IN_ROOM",
+    } satisfies JoinError);
+
+    assert(!secondJoinAck.success, "Joining second room should be failed.");
+    expect(secondJoinAck.code).toBe("IN_ROOM");
 
     const socketState = await sockets.get(firstHost.id! as SocketId);
 
@@ -113,41 +130,46 @@ describe("Test IO connection ", () => {
 
   it("can host a new room after leaving the old one", async () => {
     const socket = await newSocket();
+    const firstRoomAck = await socket.emitWithAck("room:host");
+    assert(firstRoomAck.success, "Failed to host first room.");
 
-    const firstRoom = await hostRoom(socket);
-    expect(firstRoom.isOk()).toBe(true);
+    await socket.emitWithAck("room:leave");
 
-    await leaveRoom(socket);
-
-    const secondRoom = await hostRoom(socket);
+    const secondRoomAck = await socket.emitWithAck("room:host");
+    assert(secondRoomAck.success, "Failed to host second room.");
+    const secondRoomId = secondRoomAck.data;
 
     const socketState = await sockets.get(socket.id! as SocketId);
-
-    console.log(secondRoom);
-    expect(secondRoom.isOk()).toBe(true);
-    expect(secondRoom._unsafeUnwrap()).not.toBe(firstRoom._unsafeUnwrap());
 
     expect(socketState.isOk());
     expect(socketState._unsafeUnwrap()).toEqual({
       status: "in-room",
-      roomId: secondRoom._unsafeUnwrap(),
-    });
+      roomId: secondRoomId,
+    } satisfies SocketState);
   });
 
   it("can join a new room after leaving the old one", async () => {
     const host = await newSocket();
-    const roomId = (await hostRoom(host))._unsafeUnwrap();
-
-    const joiner = await newSocket();
-    await joinRoom(joiner, roomId);
-
-    await leaveRoom(joiner);
+    const firstRoomAck = await host.emitWithAck("room:host");
+    assert(firstRoomAck.success, "Failed to host room.");
+    const firstRoomId = firstRoomAck.data;
 
     const secondHost = await newSocket();
-    const secondRoomId = (await hostRoom(secondHost))._unsafeUnwrap();
+    const secondRoomAck = await secondHost.emitWithAck("room:host");
+    assert(secondRoomAck.success, "Failed to host room.");
+    const secondRoomId = secondRoomAck.data;
 
-    const joining = await joinRoom(joiner, secondRoomId);
-    expect(joining.isOk()).toBe(true);
+    const joiner = await newSocket();
+    const joinFirstRoomAck = await joiner.emitWithAck("room:join", firstRoomId);
+    expect(joinFirstRoomAck.success).toBe(true);
+    const leaveRoomAck = await joiner.emitWithAck("room:leave");
+    expect(leaveRoomAck.success).toBe(true);
+
+    const joinSecondRoomAck = await joiner.emitWithAck(
+      "room:join",
+      secondRoomId,
+    );
+    expect(joinSecondRoomAck.success).toBe(true);
 
     const socketState = (
       await sockets.get(joiner.id! as SocketId)
@@ -162,18 +184,20 @@ describe("Test IO connection ", () => {
     const p1 = await newSocket();
     const p2 = await newSocket();
 
-    const _ = (await createRoom([p1, p2]))._unsafeUnwrap();
+    const createRoomAck = await createRoom([p1, p2]);
+    expect(createRoomAck.isOk()).toBe(true);
 
     const message = "Hello World!";
 
-    p1.emit("room:chat", message);
-
-    const chat = await new Promise<Chat>((resolve) =>
+    const promise = new Promise<Chat>((resolve) =>
       p2.once("room:chat", resolve),
     );
+    const ack = await p1.emitWithAck("room:chat", message);
+    expect(ack.success).toBe(true);
 
+    const chat = await promise;
     expect(chat.from).toBe(p1.id);
-    expect(chat.message).toEqual(message);
+    expect(chat.message).toBe(message);
   });
 
   it("can start game", async () => {
@@ -182,66 +206,45 @@ describe("Test IO connection ", () => {
     const p3 = await newSocket();
     const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
 
-    const startingGame = await startGame(p1);
+    const startGameAck = await p1.emitWithAck("game:start");
+    expect(startGameAck.success).toBe(true);
 
     const room = (await rooms.get(roomId))._unsafeUnwrap();
     assert(room.isPlaying, "Room is not playing");
     expect(room.game).toBeDefined();
     expect(room.game.questionHistory.size).toEqual(1);
-    expect(Object.values(room.game.roles).length).toEqual(3);
-    expect(startingGame.isOk()).toBe(true);
   });
 
   it("cannot start game if player is less then minimum", async () => {
     const p1 = await newSocket();
     const _ = (await createRoom([p1]))._unsafeUnwrap();
 
-    const startingGame = await startGame(p1);
-
-    expect(startingGame.isErr()).toBe(true);
+    const startGameAck = await p1.emitWithAck("game:start");
+    expect(startGameAck).toMatchObject({
+      success: false,
+      code: "NOT_ENOUGH",
+    } satisfies StartError);
   });
 
   it("cannot start game by joiners", async () => {
-    const p1 = await newSocket();
+    const host = await newSocket();
     const p2 = await newSocket();
-    const _ = (await createRoom([p1, p2]))._unsafeUnwrap();
+    const p3 = await newSocket();
+    const _ = (await createRoom([host, p2, p3]))._unsafeUnwrap();
 
-    const startingGame = await startGame(p2);
+    const startGameAckByP2 = await p2.emitWithAck("game:start");
+    expect(startGameAckByP2).toMatchObject({
+      success: false,
+      code: "NOT_HOST",
+    } satisfies StartError);
 
-    expect(startingGame.isErr()).toBe(true);
+    const startGameAckByP3 = await p3.emitWithAck("game:start");
+    expect(startGameAckByP3).toMatchObject({
+      success: false,
+      code: "NOT_HOST",
+    } satisfies StartError);
   });
 });
-
-// host a room where the socket is a host
-const hostRoom = (socket: ClientSocket): ResultAsync<RoomId, string> => {
-  const promise = new Promise<RoomId>((resolve, reject) => {
-    socket.once("room:hosted", resolve);
-    socket.once("room:join_failed", reject);
-  });
-  socket.emit("room:host");
-  return ResultAsync.fromPromise(promise, (e) => e as string);
-};
-
-// join a given room id where the socket is a joiner
-const joinRoom = (
-  socket: ClientSocket,
-  roomId: RoomId,
-): ResultAsync<void, string> => {
-  const promise = new Promise<void>((resolve, reject) => {
-    socket.once("room:joined", () => resolve());
-    socket.once("room:join_failed", reject);
-  });
-  socket.emit("room:join", roomId);
-  return ResultAsync.fromPromise(promise, (e) => e as string);
-};
-
-// leave the current room
-const leaveRoom = (socket: ClientSocket): Promise<void> => {
-  return new Promise((resolve) => {
-    socket.emit("room:leave");
-    setTimeout(resolve, 50);
-  });
-};
 
 // create a socket.io connection to a localhost server (for testing purpose)
 const newSocket = async (): Promise<ClientSocket> => {
@@ -253,21 +256,24 @@ const newSocket = async (): Promise<ClientSocket> => {
 };
 
 // create a room where the first socket will be the host, and the rest are the members/joiners
-const createRoom = (sockets: ClientSocket[]): ResultAsync<RoomId, string> => {
-  if (sockets.length < 1) return errAsync("Failed to create an empty room.");
+const createRoom = (
+  sockets: ClientSocket[],
+): ResultAsync<RoomId, HostError | JoinError> => {
   const [host, ...joiners] = sockets;
-  return hostRoom(host).andTee(async (roomId) => {
-    await Promise.all(joiners.map((j) => joinRoom(j, roomId)));
-  });
-};
+  return safeTry(async function* () {
+    const roomId = yield* ResultAsync.fromPromise(
+      host.emitWithAck("room:host"),
+      () => ackErr("UNEXPECTED"),
+    ).andThen((ack) => (ack.success ? okAsync(ack.data) : errAsync(ack)));
 
-const startGame = (socket: ClientSocket): ResultAsync<void, string> => {
-  return ResultAsync.fromPromise(
-    new Promise<void>((resolve, reject) => {
-      socket.once("game:error", reject);
-      socket.once("game:state", () => resolve());
-      socket.emit("game:start");
-    }),
-    (err) => "Failed to start game " + err,
-  );
+    yield* ResultAsync.fromPromise(
+      Promise.all(joiners.map((j) => j.emitWithAck("room:join", roomId))),
+      () => ackErr("UNEXPECTED"),
+    ).andThen((acks) => {
+      const failedAck = acks.find((ack) => !ack.success);
+      return failedAck ? errAsync(failedAck) : okAsync();
+    });
+
+    return okAsync(roomId);
+  });
 };

@@ -1,4 +1,9 @@
-import { RoomId, RoomState, SocketId, SocketState } from "@sounds-fishy/shared";
+import {
+  RoomId,
+  ServerState,
+  SocketId,
+  SocketState,
+} from "@sounds-fishy/shared";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 
 type GetError = "NOT FOUND";
@@ -36,5 +41,5 @@ export const createInMemoryState = <K, U>(): StateStore<K, U> => {
   };
 };
 
-export const rooms = createInMemoryState<RoomId, RoomState>();
+export const rooms = createInMemoryState<RoomId, ServerState>();
 export const sockets = createInMemoryState<SocketId, SocketState>();
