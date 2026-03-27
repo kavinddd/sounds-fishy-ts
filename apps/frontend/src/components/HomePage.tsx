@@ -8,9 +8,13 @@ export function HomePage() {
   const { hostRoom, joinRoom, status, error } = useSocket();
   const [joinRoomId, setJoinRoomId] = useState("");
 
-  const handleJoin = () => {
+  const handleHost = async () => {
+    await hostRoom();
+  };
+
+  const handleJoin = async () => {
     if (joinRoomId.trim()) {
-      joinRoom(joinRoomId.trim());
+      await joinRoom(joinRoomId.trim());
     }
   };
 
@@ -35,7 +39,7 @@ export function HomePage() {
           )}
 
           <Button
-            onClick={hostRoom}
+            onClick={handleHost}
             disabled={status === "connecting"}
             className="w-full"
           >

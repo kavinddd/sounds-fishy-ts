@@ -1,19 +1,21 @@
 import { createContext, useEffect, useState, type ReactNode } from "react";
 import { io } from "socket.io-client";
-import type { ClientSocket, RoomId, Chat } from "@sounds-fishy/shared";
+import type { ClientSocket, ClientState, RoomId, Chat } from "@sounds-fishy/shared";
 
-type SocketStatus = "idle" | "connecting" | "in-room" | "error";
+type SocketStatus = "idle" | "connecting" | "in-room" | "in-game" | "error";
 
 interface SocketContextValue {
   socket: ClientSocket | null;
+  playerId: string | null;
   status: SocketStatus;
   roomId: string | null;
+  roomState: ClientState | null;
   chats: Chat[];
   error: string | null;
-  hostRoom: () => void;
-  joinRoom: (roomId: string) => void;
-  leaveRoom: () => void;
-  sendChat: (message: string) => void;
+  hostRoom: () => Promise<void>;
+  joinRoom: (roomId: string) => Promise<void>;
+  leaveRoom: () => Promise<void>;
+  sendChat: (message: string) => Promise<void>;
 }
 
 export const SocketContext = createContext<SocketContextValue | null>(null);
@@ -22,8 +24,10 @@ const SOCKET_URL = "http://localhost:3001";
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<ClientSocket | null>(null);
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [status, setStatus] = useState<SocketStatus>("idle");
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomState, setRoomState] = useState<ClientState | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,13 +39,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSocket(newSocket);
 
     newSocket.on("connect", () => {
+      setPlayerId(newSocket.id ?? null);
       setStatus("idle");
       setError(null);
     });
 
     newSocket.on("disconnect", () => {
+      setPlayerId(null);
       setStatus("idle");
       setRoomId(null);
+      setRoomState(null);
       setChats([]);
     });
 
@@ -50,25 +57,22 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setError("Cannot connect to server");
     });
 
-    newSocket.on("room:hosted", (hostedRoomId) => {
-      setRoomId(hostedRoomId);
-      setStatus("in-room");
-      setChats([]);
+    newSocket.on("room:sync", (state: ClientState) => {
+      setRoomId(state.id);
+      setRoomState(state);
+      if (state.isPlaying) {
+        setStatus("in-game");
+      } else {
+        setStatus("in-room");
+      }
     });
 
-    newSocket.on("room:joined", (joinedRoomId) => {
-      setRoomId(joinedRoomId);
-      setStatus("in-room");
-      setChats([]);
-    });
-
-    newSocket.on("room:join_failed", (reason) => {
-      setError(reason);
-      setStatus("idle");
-    });
-
-    newSocket.on("room:chat", (chat) => {
+    newSocket.on("room:chat", (chat: Chat) => {
       setChats((prev) => [...prev, chat]);
+    });
+
+    newSocket.on("game:error", (reason: string) => {
+      setError(reason);
     });
 
     return () => {
@@ -76,32 +80,60 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const hostRoom = () => {
-    if (socket) {
-      setStatus("connecting");
-      socket.emit("room:host");
+  const hostRoom = async () => {
+    if (!socket) return;
+    
+    setStatus("connecting");
+    setError(null);
+
+    const ack = await socket.emitWithAck("room:host");
+    
+    if (ack.success) {
+      setRoomId(ack.data);
+      setChats([]);
+    } else {
+      setStatus("idle");
+      setError(getErrorMessage(ack.code, "host"));
     }
   };
 
-  const joinRoom = (id: string) => {
-    if (socket) {
-      setStatus("connecting");
-      socket.emit("room:join", id as RoomId);
+  const joinRoom = async (id: string) => {
+    if (!socket) return;
+    
+    setStatus("connecting");
+    setError(null);
+
+    const ack = await socket.emitWithAck("room:join", id as RoomId);
+    
+    if (ack.success) {
+      setRoomId(id);
+      setChats([]);
+    } else {
+      setStatus("idle");
+      setError(getErrorMessage(ack.code, "join"));
     }
   };
 
-  const leaveRoom = () => {
-    if (socket) {
-      socket.emit("room:leave");
+  const leaveRoom = async () => {
+    if (!socket) return;
+
+    const ack = await socket.emitWithAck("room:leave");
+    
+    if (ack.success) {
       setRoomId(null);
+      setRoomState(null);
       setStatus("idle");
       setChats([]);
     }
   };
 
-  const sendChat = (message: string) => {
-    if (socket && roomId) {
-      socket.emit("room:chat", message);
+  const sendChat = async (message: string) => {
+    if (!socket || !roomId) return;
+
+    const ack = await socket.emitWithAck("room:chat", message);
+    
+    if (!ack.success) {
+      setError(getErrorMessage(ack.code, "chat"));
     }
   };
 
@@ -109,8 +141,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     <SocketContext.Provider
       value={{
         socket,
+        playerId,
         status,
         roomId,
+        roomState,
         chats,
         error,
         hostRoom,
@@ -122,4 +156,25 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       {children}
     </SocketContext.Provider>
   );
+}
+
+function getErrorMessage(code: string, action: string): string {
+  const messages: Record<string, Record<string, string>> = {
+    host: {
+      IN_ROOM: "You are already in a room",
+      UNEXPECTED: "Failed to host room",
+    },
+    join: {
+      IN_ROOM: "You are already in a room",
+      IN_GAME: "Room is already in game",
+      FULL: "Room is full",
+      UNEXPECTED: "Failed to join room",
+    },
+    chat: {
+      NO_ROOM: "You are not in a room",
+      UNEXPECTED: "Failed to send message",
+    },
+  };
+  
+  return messages[action]?.[code] ?? `Failed to ${action}`;
 }

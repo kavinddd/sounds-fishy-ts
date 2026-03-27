@@ -6,18 +6,21 @@ import { Bubbles } from "./Bubbles";
 import type { Chat } from "@sounds-fishy/shared";
 
 export function RoomPage() {
-  const { roomId, chats, sendChat, leaveRoom } = useSocket();
+  const { playerId, chats, sendChat, leaveRoom } = useSocket();
   const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chats]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (message.trim()) {
-      sendChat(message.trim());
+      setIsSending(true);
+      await sendChat(message.trim());
       setMessage("");
+      setIsSending(false);
     }
   };
 
@@ -38,9 +41,6 @@ export function RoomPage() {
             <h1 className="font-display text-xl font-bold text-accent">
               Room
             </h1>
-            <p className="text-text-light text-sm font-mono">
-              {roomId}
-            </p>
           </div>
           <Button onClick={leaveRoom} variant="outline" className="px-4 py-2 text-sm">
             Leave
@@ -59,17 +59,26 @@ export function RoomPage() {
                 </p>
               </div>
             ) : (
-              chats.map((chat: Chat, index: number) => (
-                <div
-                  key={index}
-                  className="bg-secondary rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]"
-                >
-                  <p className="text-sm text-text-light mb-1">
-                    Player {chat.from.slice(0, 4)}
-                  </p>
-                  <p className="text-text">{chat.message}</p>
-                </div>
-              ))
+              chats.map((chat: Chat, index: number) => {
+                const isOwn = chat.from === playerId;
+                return (
+                  <div
+                    key={index}
+                    className={`px-4 py-2 max-w-[80%] rounded-2xl ${
+                      isOwn
+                        ? "bg-primary ml-auto rounded-tr-sm"
+                        : "bg-secondary rounded-tl-sm"
+                    }`}
+                  >
+                    {!isOwn && (
+                      <p className="text-sm text-text-light mb-1">
+                        Player {chat.from.slice(0, 4)}
+                      </p>
+                    )}
+                    <p className="text-text">{chat.message}</p>
+                  </div>
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -86,7 +95,7 @@ export function RoomPage() {
             placeholder="Type a message..."
             className="flex-1 px-4 py-3 rounded-2xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors"
           />
-          <Button onClick={handleSend} disabled={!message.trim()} className="px-6">
+          <Button onClick={handleSend} disabled={!message.trim() || isSending} className="px-6">
             Send
           </Button>
         </div>
