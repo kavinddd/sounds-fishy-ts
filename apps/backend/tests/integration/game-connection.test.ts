@@ -13,6 +13,7 @@ import {
   ackErr,
   Chat,
   ClientSocket,
+  ClientState,
   HostError,
   JoinError,
   RoomId,
@@ -47,8 +48,12 @@ describe("Test IO connection ", () => {
 
   it("can host a room", async () => {
     const socket = await newSocket();
+
+    const stateSyncPromise = new Promise<ClientState>((resolve) =>
+      socket.once("room:sync", resolve),
+    );
+
     const roomId = await socket.emitWithAck("room:host");
-    // const roomId = await hostRoom(socket);
     assert(roomId.success, "Acked failed.");
 
     const socketState = await sockets.get(socket.id! as SocketId);
@@ -58,6 +63,12 @@ describe("Test IO connection ", () => {
       status: "in-room",
       roomId: roomId.data,
     });
+
+    const stateSync = await stateSyncPromise;
+    expect(stateSync.id).toBe(roomId.data);
+    expect(stateSync.players).toContain(socket.id);
+    expect(stateSync.hostId).toBe(socket.id);
+    expect(stateSync.isPlaying).toBe(false);
   });
 
   it("cannot host multiple rooms", async () => {
@@ -82,6 +93,14 @@ describe("Test IO connection ", () => {
     assert(result.success, "Failed to host room.");
     const roomId = result.data;
     const joiner = await newSocket();
+
+    const hostStateSyncPromise = new Promise<ClientState>((resolve) =>
+      socket.once("room:sync", resolve),
+    );
+    const joinerStateSyncPromise = new Promise<ClientState>((resolve) =>
+      joiner.once("room:sync", resolve),
+    );
+
     const joining = await joiner.emitWithAck("room:join", result.data);
     expect(joining.success);
 
@@ -92,6 +111,14 @@ describe("Test IO connection ", () => {
       status: "in-room",
       roomId,
     });
+
+    const hostStateSync = await hostStateSyncPromise;
+    expect(hostStateSync.players).toContain(socket.id);
+    expect(hostStateSync.players).toContain(joiner.id);
+
+    const joinerStateSync = await joinerStateSyncPromise;
+    expect(joinerStateSync.players).toContain(socket.id);
+    expect(joinerStateSync.players).toContain(joiner.id);
   });
 
   it("cannot join multiple rooms", async () => {
@@ -135,6 +162,10 @@ describe("Test IO connection ", () => {
 
     await socket.emitWithAck("room:leave");
 
+    const stateSyncPromise = new Promise<ClientState>((resolve) =>
+      socket.once("room:sync", resolve),
+    );
+
     const secondRoomAck = await socket.emitWithAck("room:host");
     assert(secondRoomAck.success, "Failed to host second room.");
     const secondRoomId = secondRoomAck.data;
@@ -146,6 +177,11 @@ describe("Test IO connection ", () => {
       status: "in-room",
       roomId: secondRoomId,
     } satisfies SocketState);
+
+    const stateSync = await stateSyncPromise;
+    expect(stateSync.id).toBe(secondRoomId);
+    expect(stateSync.players).toContain(socket.id);
+    expect(stateSync.isPlaying).toBe(false);
   });
 
   it("can join a new room after leaving the old one", async () => {
@@ -165,6 +201,10 @@ describe("Test IO connection ", () => {
     const leaveRoomAck = await joiner.emitWithAck("room:leave");
     expect(leaveRoomAck.success).toBe(true);
 
+    const stateSyncPromise = new Promise<ClientState>((resolve) =>
+      joiner.once("room:sync", resolve),
+    );
+
     const joinSecondRoomAck = await joiner.emitWithAck(
       "room:join",
       secondRoomId,
@@ -178,6 +218,11 @@ describe("Test IO connection ", () => {
       status: "in-room",
       roomId: secondRoomId,
     });
+
+    const stateSync = await stateSyncPromise;
+    expect(stateSync.id).toBe(secondRoomId);
+    expect(stateSync.players).toContain(secondHost.id);
+    expect(stateSync.players).toContain(joiner.id);
   });
 
   it("can chat", async () => {

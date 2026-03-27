@@ -88,6 +88,14 @@ const attachIoServerEventListeners = (io: IoServer) => {
         isPlaying: false,
       });
 
+      const room = (await rooms.get(newRoomId))._unsafeUnwrap();
+      const broadcastResult = await broadcastClientState(room, io);
+
+      if (broadcastResult.isErr()) {
+        logger.info("Failed to broadcast client state.");
+        return ack(ackErr("UNEXPECTED"));
+      }
+
       return ack(ackOk(newRoomId));
       // return ack(ackOk());
     });
@@ -126,15 +134,24 @@ const attachIoServerEventListeners = (io: IoServer) => {
 
       socket.join(roomId);
 
-      rooms.set(roomId, {
+      const updatedRoom: ServerState = {
         ...room,
         players: [...room.players, socket.id as SocketId],
-      });
+      };
+
+      rooms.set(roomId, updatedRoom);
 
       sockets.set(socket.id as SocketId, {
         status: "in-room",
         roomId,
       });
+
+      const broadcastResult = await broadcastClientState(updatedRoom, io);
+
+      if (broadcastResult.isErr()) {
+        logger.info("Failed to broadcast client state.");
+        return ack(ackErr("UNEXPECTED"));
+      }
 
       return ack(ackOk());
     });
@@ -165,12 +182,22 @@ const attachIoServerEventListeners = (io: IoServer) => {
 
       const room = roomResult.value;
 
-      socket.leave(state.roomId);
-      rooms.set(state.roomId, {
+      await socket.leave(state.roomId);
+
+      const updatedRoom = {
         ...room,
         players: [...room.players].filter((p) => p !== socket.id),
-      });
-      sockets.set(socket.data.id, { status: "idle" });
+      };
+
+      await rooms.set(state.roomId, updatedRoom);
+      await sockets.set(socket.data.id, { status: "idle" });
+
+      const broadcastResult = await broadcastClientState(updatedRoom, io);
+
+      if (broadcastResult.isErr()) {
+        logger.info("Failed to broadcast client state.");
+        return ack(ackErr("UNEXPECTED"));
+      }
 
       return ack(ackOk());
     });
@@ -250,15 +277,15 @@ const attachIoServerEventListeners = (io: IoServer) => {
         },
       };
 
-      await broadcastGameState(newRoom, io).match(
+      await broadcastClientState(newRoom, io).match(
         () => logger.info("Broadcasted game states."),
         (err) => {
           logger.info(`Failed to brodcast game state, ${err}`);
         },
       );
 
-      rooms.set(room.id, newRoom);
-      sockets.set(socket.data.id, {
+      await rooms.set(room.id, newRoom);
+      await sockets.set(socket.data.id, {
         status: "in-game",
         roomId: state.roomId,
       });
@@ -280,7 +307,7 @@ const randomProblem = (exclude?: Set<string>): [string, string] => {
   return questions[randomInt(0, questions.length - 1)];
 };
 
-const broadcastGameState = (
+const broadcastClientState = (
   room: ServerState,
   io: IoServer,
 ): ResultAsync<void, string> => {
