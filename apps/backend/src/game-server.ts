@@ -14,7 +14,7 @@ import {
   SocketId,
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
-import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
+import { err, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { randomInt } from "crypto";
 import { rooms, sockets } from "./store";
 
@@ -96,6 +96,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("UNEXPECTED"));
       }
 
+      logger.info(`${room.id} was hosted by ${socket.data.id}`);
       return ack(ackOk(newRoomId));
       // return ack(ackOk());
     });
@@ -311,12 +312,11 @@ const broadcastClientState = (
   room: ServerState,
   io: IoServer,
 ): ResultAsync<void, string> => {
-  if (!room.isPlaying) {
-    return errAsync(
-      "Failed to broadcast game state dues to the game is not started",
-    );
-  }
-
+  // if (!room.isPlaying) {
+  //   return errAsync(
+  //     "Failed to broadcast game state dues to the game is not started",
+  //   );
+  // }
   return ResultAsync.fromPromise(
     io.in(room.id).fetchSockets(),
     () => "Failed to fetch sockets while broadcasting.",
