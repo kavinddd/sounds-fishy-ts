@@ -12,10 +12,12 @@ interface SocketContextValue {
   roomState: ClientState | null;
   chats: Chat[];
   error: string | null;
+  isHost: boolean;
   hostRoom: () => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
   leaveRoom: () => Promise<void>;
   sendChat: (message: string) => Promise<void>;
+  startGame: () => Promise<void>;
 }
 
 export const SocketContext = createContext<SocketContextValue | null>(null);
@@ -137,6 +139,18 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const startGame = async () => {
+    if (!socket || !roomId) return;
+
+    const ack = await socket.emitWithAck("game:start");
+    
+    if (!ack.success) {
+      setError(getErrorMessage(ack.code, "start"));
+    }
+  };
+
+  const isHost = roomState !== null && playerId !== null && roomState.hostId === playerId;
+
   return (
     <SocketContext.Provider
       value={{
@@ -147,10 +161,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         roomState,
         chats,
         error,
+        isHost,
         hostRoom,
         joinRoom,
         leaveRoom,
         sendChat,
+        startGame,
       }}
     >
       {children}
@@ -173,6 +189,12 @@ function getErrorMessage(code: string, action: string): string {
     chat: {
       NO_ROOM: "You are not in a room",
       UNEXPECTED: "Failed to send message",
+    },
+    start: {
+      NO_ROOM: "You are not in a room",
+      NOT_HOST: "Only the host can start the game",
+      IN_GAME: "Game is already in progress",
+      UNEXPECTED: "Failed to start game",
     },
   };
   
