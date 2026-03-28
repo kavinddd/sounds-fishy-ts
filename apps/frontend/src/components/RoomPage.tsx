@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
-import { Card } from "./Input";
 import { Bubbles } from "./Bubbles";
 import type { Chat } from "@sounds-fishy/shared";
 
+const DEV_MODE = import.meta.env.DEV;
+
 export function RoomPage() {
-  const { playerId, chats, sendChat, leaveRoom } = useSocket();
+  const { playerId, roomId, roomState, chats, isHost, sendChat, leaveRoom, startGame } = useSocket();
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [showDevInfo, setShowDevInfo] = useState(false);
+  const [showPlayers, setShowPlayers] = useState(false);
+  const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,75 +35,305 @@ export function RoomPage() {
     }
   };
 
+  const handleStartGame = async () => {
+    await startGame();
+  };
+
+  const handleCopyCode = async () => {
+    if (roomId) {
+      await navigator.clipboard.writeText(roomId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const players = roomState?.players ?? [];
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-[100dvh] flex flex-col lg:flex-row overflow-hidden">
       <Bubbles />
       
-      <header className="bg-surface/80 backdrop-blur-sm shadow-md px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-xl font-bold text-accent">
+      <header className="flex-shrink-0 bg-surface/80 backdrop-blur-sm shadow-md px-3 py-2 lg:hidden">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-lg font-bold text-accent">
               Room
             </h1>
+            {roomId && (
+              <button
+                onClick={handleCopyCode}
+                className="flex items-center gap-1 text-xs text-text-light bg-background px-1.5 py-0.5 rounded hover:bg-background/80 transition-colors"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-3 h-3 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-xs lg:text-base">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-xs lg:text-sm">{roomId}</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
-          <Button onClick={leaveRoom} variant="outline" className="px-4 py-2 text-sm">
-            Leave
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPlayers(true)}
+              className="flex items-center gap-1 px-2 py-1.5 text-sm bg-background rounded hover:bg-background/80 transition-colors"
+            >
+              <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-xs lg:text-sm">{players.length}</span>
+            </button>
+            <Button onClick={leaveRoom} variant="outline" className="px-3 py-1.5 text-sm">
+              Leave
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg mx-auto w-full p-4 pb-24">
-        <Card className="h-full min-h-[50vh] flex flex-col">
-          <div className="flex-1 overflow-y-auto space-y-3 mb-4">
-            {chats.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-text-light">
-                <p className="text-center">
-                  No messages yet.<br />
-                  Say hello!
-                </p>
-              </div>
-            ) : (
-              chats.map((chat: Chat, index: number) => {
-                const isOwn = chat.from === playerId;
-                return (
-                  <div
-                    key={index}
-                    className={`px-4 py-2 max-w-[80%] rounded-2xl ${
-                      isOwn
-                        ? "bg-primary ml-auto rounded-tr-sm"
-                        : "bg-secondary rounded-tl-sm"
-                    }`}
-                  >
-                    {!isOwn && (
-                      <p className="text-sm text-text-light mb-1">
-                        Player {chat.from.slice(0, 4)}
-                      </p>
-                    )}
-                    <p className="text-text">{chat.message}</p>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
+      <aside className="hidden lg:flex lg:flex-col w-72 bg-surface/50 border-r border-border">
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="font-display text-xl font-bold text-accent">Room</h1>
+            <Button onClick={leaveRoom} variant="outline" className="px-3 py-1.5 text-sm">
+              Leave
+            </Button>
           </div>
-        </Card>
+          {roomId && (
+            <button
+              onClick={handleCopyCode}
+              className="w-full bg-background rounded-lg p-3 hover:bg-background/80 transition-colors text-left"
+            >
+              <p className="text-xs lg:text-sm text-text-light mb-1">Room Code</p>
+              <div className="flex items-center justify-between">
+                <p className="text-lg font-mono font-bold text-text">{roomId}</p>
+                {copied ? (
+                  <span className="text-xs lg:text-sm text-green-600">Copied!</span>
+                ) : (
+                  <svg className="w-4 h-4 lg:w-5 lg:h-5 text-text-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </div>
+            </button>
+          )}
+        </div>
+        
+        <div className="p-4 flex-1 overflow-y-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-text">Players ({players.length})</h2>
+            {isHost && (
+              <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">
+                You are host
+              </span>
+            )}
+          </div>
+          <ul className="space-y-2">
+            {players.map((player) => {
+              const isPlayerHost = roomState?.hostId === player;
+              const isCurrentPlayer = player === playerId;
+              return (
+                <li
+                  key={player}
+                  className="flex items-center justify-between px-3 py-2.5 bg-background rounded-lg"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-sm lg:text-base">
+                      {player.slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="text-sm lg:text-base text-text">
+                      Player {player.slice(0, 4)}
+                      {isCurrentPlayer && <span className="text-text-light"> (you)</span>}
+                    </span>
+                  </div>
+                  {isPlayerHost && (
+                    <span className="text-xs lg:text-sm bg-primary/20 text-primary px-2 py-0.5 rounded">
+                      Host
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          
+          {isHost && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <Button
+                onClick={handleStartGame}
+                className="w-full"
+              >
+                Start Game
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {DEV_MODE && (
+          <div className="p-4 border-t border-border">
+            <button
+              onClick={() => setShowDevInfo(!showDevInfo)}
+              className="text-xs text-text-light hover:text-text underline mb-2"
+            >
+              {showDevInfo ? "Hide" : "Show"} Room State (DEV)
+            </button>
+            {showDevInfo && roomState && (
+              <pre className="bg-background p-2 rounded-lg text-xs text-text overflow-x-auto max-h-40">
+                {JSON.stringify(roomState, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
+      </aside>
+
+      <main className="flex-1 flex flex-col w-full min-h-0 lg:h-screen lg:max-h-screen">
+        {DEV_MODE && !showPlayers && (
+          <div className="p-3 lg:p-2 flex-shrink-0">
+            <button
+              onClick={() => setShowDevInfo(!showDevInfo)}
+              className="text-xs text-text-light hover:text-text underline"
+            >
+              {showDevInfo ? "Hide" : "Show"} Room State (DEV)
+            </button>
+            {showDevInfo && roomState && (
+              <pre className="bg-background p-2 rounded-lg text-xs text-text overflow-x-auto mt-1">
+                {JSON.stringify(roomState, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
+
+        <div className="flex-1 min-h-0 p-3 lg:p-4 pb-24 lg:pb-4 overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden max-w-5xl mx-auto w-full">
+            <div className="flex-1 overflow-y-auto space-y-2 pb-3 min-h-0">
+              {chats.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-text-light">
+                  <p className="text-center text-sm">
+                    No messages yet.<br />
+                    Say hello!
+                  </p>
+                </div>
+              ) : (
+                chats.map((chat: Chat, index: number) => {
+                  const isOwn = chat.from === playerId;
+                  return (
+                    <div
+                      key={index}
+                      className={`px-3 py-1.5 max-w-[85%] rounded-2xl ${
+                        isOwn
+                          ? "bg-primary ml-auto rounded-tr-sm"
+                          : "bg-secondary rounded-tl-sm"
+                      }`}
+                    >
+                      {!isOwn && (
+                        <p className="text-xs text-text-light mb-0.5">
+                          Player {chat.from.slice(0, 4)}
+                        </p>
+                      )}
+                      <p className="text-sm text-text">{chat.message}</p>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+        </div>
+
+        <div className="fixed bottom-0 left-0 right-0 bg-surface/80 backdrop-blur-sm p-3 lg:relative lg:bg-transparent lg:p-0 lg:mb-4 lg:px-4">
+          <div className="flex gap-2 max-w-3xl mx-auto">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type..."
+              className="flex-1 px-3 py-2.5 rounded-xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors text-base"
+            />
+            <Button 
+              onClick={handleSend} 
+              disabled={!message.trim() || isSending} 
+              className="px-4 lg:px-6 py-2.5 text-base"
+            >
+              <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </Button>
+          </div>
+        </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-surface/80 backdrop-blur-sm p-4">
-        <div className="max-w-lg mx-auto flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            className="flex-1 px-4 py-3 rounded-2xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors"
-          />
-          <Button onClick={handleSend} disabled={!message.trim() || isSending} className="px-6">
-            Send
-          </Button>
+      {showPlayers && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center lg:hidden"
+          onClick={() => setShowPlayers(false)}
+        >
+          <div 
+            className="bg-surface w-full max-w-md max-h-[70vh] rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-text">Players ({players.length})</h2>
+                {isHost && (
+                  <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">
+                    Host
+                  </span>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowPlayers(false)}
+                className="p-1 hover:bg-background rounded"
+              >
+                <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[50vh]">
+              <ul className="space-y-2">
+                {players.map((player) => {
+                  const isPlayerHost = roomState?.hostId === player;
+                  const isCurrentPlayer = player === playerId;
+                  return (
+                    <li
+                      key={player}
+                      className="flex items-center justify-between px-3 py-2 bg-background rounded-lg"
+                    >
+                      <span className="text-text">
+                        Player {player.slice(0, 4)}
+                        {isCurrentPlayer && " (you)"}
+                      </span>
+                      {isPlayerHost && !isHost && (
+                        <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                          Host
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {isHost && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <Button
+                    onClick={handleStartGame}
+                    className="w-full"
+                  >
+                    Start Game
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
