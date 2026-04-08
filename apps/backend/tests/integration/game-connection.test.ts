@@ -14,6 +14,7 @@ import {
   Chat,
   ClientSocket,
   ClientState,
+  HintError,
   HostError,
   JoinError,
   RoomId,
@@ -367,6 +368,48 @@ describe("Test IO connection ", () => {
       p2Socket.id,
     );
     expect(selectHinterAck.success).toBe(true);
+  });
+
+  describe("game:hint", () => {
+    it("cannot give hint if not current hinter", async () => {
+      const p1 = await newSocket();
+      const p2 = await newSocket();
+      const p3 = await newSocket();
+      const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+      await p1.emitWithAck("game:start");
+
+      const room = (await rooms.get(roomId))._unsafeUnwrap();
+      const masterSocketId = room.game.currentMaster;
+
+      const masterSocket = [p1, p2, p3].find(
+        (s) => s.id === masterSocketId,
+      )!;
+      const hinterSocket = [p1, p2, p3].find(
+        (s) => s.id !== masterSocketId,
+      )!;
+
+      const hintAck = await hinterSocket.emitWithAck(
+        "game:hint",
+        "test hint",
+      );
+      expect(hintAck).toMatchObject({
+        success: false,
+        code: "NOT_HINTER",
+      } satisfies HintError);
+    });
+
+    it("cannot give hint if room is not playing", async () => {
+      const p1 = await newSocket();
+      const p2 = await newSocket();
+      const roomId = (await createRoom([p1, p2]))._unsafeUnwrap();
+
+      const hintAck = await p1.emitWithAck("game:hint", "test hint");
+      expect(hintAck).toMatchObject({
+        success: false,
+        code: "UNEXPECTED",
+      } satisfies HintError);
+    });
   });
 });
 
