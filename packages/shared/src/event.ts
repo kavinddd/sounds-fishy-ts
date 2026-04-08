@@ -36,12 +36,16 @@ export type ClientToServerEvents = {
   ) => void;
 
   // hinter hints
+  // red fish cannot give hint that have the same as the answer
+  // blue fish cannot give hint thet unlike the answer
   "game:hint": (
     hint: string,
     ack: AckCallback<void, HintError["code"]>,
   ) => void;
 
   // master eliminate red fish
+  // if eliminate red fish and there are more red fish, continue eliminating
+  // if eliminate blue fish or red fish are all dead, then the score is being updated
   "game:eliminate": (
     socketId: SocketId,
     ack: AckCallback<void, EliminateError["code"]>,

@@ -36,8 +36,10 @@ type BaseGameState = {
   status: "select-hinter" | "eliminate" | "hint";
   question: string;
   hintHistory: HintHistory[];
-  hinter?: SocketId;
+  currentHinter?: SocketId;
   eliminated: Set<SocketId>;
+  currentMaster: SocketId;
+  masterHistory: Set<SocketId>;
 };
 
 export type ServerGameState = BaseGameState & {

@@ -14,7 +14,7 @@ import {
   SocketId,
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
-import { err, ok, okAsync, Result, ResultAsync } from "neverthrow";
+import { okAsync, ResultAsync } from "neverthrow";
 import { randomInt } from "crypto";
 import { rooms, sockets } from "./store";
 
@@ -53,7 +53,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         (_) => logger.error("Failed to delete state due to no state stored"),
       );
 
-      // TODO: clean up rooms state
+      // TODO: clean up rooms state if the disconnect guy is the last person
     });
     // endregion
 
@@ -255,15 +255,15 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("NOT_HOST"));
       }
 
-      const assigingPlayerRoles = generateRoles(room.players.length).map(
-        (roles) => assignRolesToPlayers(room.players, roles),
-      );
+      const roles = assignRolesToPlayers(room.players, new Set());
 
-      if (assigingPlayerRoles.isErr()) {
-        return ack(ackErr("NOT_ENOUGH"));
+      const master = Object.entries(roles).find(
+        ([_, role]) => role === "master",
+      )?.[0] as SocketId;
+
+      if (!master) {
+        return ack(ackErr("UNEXPECTED"));
       }
-
-      const roles = assigingPlayerRoles.value;
       const [question, answer] = randomProblem();
 
       const newRoom: ServerState = {
@@ -278,6 +278,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
           hintHistory: [],
           eliminated: new Set(),
           status: "select-hinter",
+          masterHistory: new Set(),
+          currentMaster: master,
         },
       };
 
@@ -340,7 +342,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         game: {
           ...room.game,
           // hintHistory: room.game.hintHistory.add(socket.data.id),
-          hinter: socket.data.id,
+          currentHinter: socket.data.id,
         },
       };
 
@@ -377,7 +379,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
 
       const role = room.game.roles[socket.data.id];
 
-      if (room.game.hinter !== socket.data.id) {
+      if (room.game.currentHinter !== socket.data.id) {
         return ack(ackErr("NOT_HINTER"));
       }
 
@@ -396,15 +398,24 @@ const attachIoServerEventListeners = (io: IoServer) => {
           break;
       }
 
+      const hintHistory = [
+        ...room.game.hintHistory,
+        { hinter: socket.data.id, hint },
+      ];
+
+      const hintedSocketIds = hintHistory.map((h) => h.hinter);
+
+      const isEveryoneHint = room.players
+        .filter((socketId) => room.game.currentMaster !== socketId)
+        .every(hintedSocketIds.includes);
+
       const newState: ServerState = {
         ...room,
         game: {
           ...room.game,
-          hintHistory: [
-            ...room.game.hintHistory,
-            { hinter: socket.data.id, hint },
-          ],
-          hinter: undefined,
+          hintHistory,
+          status: isEveryoneHint ? "eliminate" : "select-hinter",
+          currentHinter: undefined,
         },
       };
 
@@ -445,18 +456,81 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("NOT_MASTER"));
       }
 
-      const eliminateRole = room.game.roles[socketId];
+      const eliminatedRole = room.game.roles[socketId];
 
-      if (eliminateRole === "blue") {
+      // this can end multiple ways
+      // 1. next round => find new masters, whether win or lose
+      // 2. the game is done => if everyone is already a master
+      // so the flow should be
+      // 1. decide win or lose, save the score
+      // 2. decide if next round or the game is done
+
+      if (eliminatedRole === "blue") {
         logger.info("Game over");
-        // TODO: do something to let everyone know that the game is over
+
+        // TODO: do something to let everyone know that the game is over, continue next round
+
+        // TODO: or, if every one is already being a master, the game is done
+        const newState = room;
+        await rooms.set(room.id, newState);
+        await broadcastClientState(newState, io);
+
         return ack(ackOk());
       }
 
-      const eliminated = room.game.eliminated.add(socketId);
+      const eliminatedSocketIds = room.game.eliminated.add(socketId);
+      const redFishSocketIds = Object.entries(room.game.roles)
+        .filter(([_, role]) => role === "red")
+        .map(([id, _]) => id as SocketId);
+
+      const isAllRedFishEliminated = redFishSocketIds.every(
+        eliminatedSocketIds.has,
+      );
+
+      if (!isAllRedFishEliminated) {
+        const newState: ServerState = {
+          ...room,
+          game: {
+            ...room.game,
+            eliminated: eliminatedSocketIds,
+          },
+        };
+
+        await rooms.set(room.id, newState);
+        await broadcastClientState(newState, io);
+
+        return ack(ackOk());
+      }
+
+      const [newQuestion, newAnswer] = randomProblem();
+
+      const newRoles = assignRolesToPlayers(
+        room.players,
+        room.game.masterHistory,
+      );
+
+      const newMaster = room.players.find((id) => newRoles[id] === "master");
+
+      if (!newMaster) {
+        logger.info("Failed to find new master.");
+        return ack(ackErr("UNEXPECTED"));
+      }
+
       const newState: ServerState = {
         ...room,
-        game: { ...room.game, eliminated },
+        game: {
+          round: room.game.round + 1,
+          questionHistory: room.game.questionHistory,
+          question: newQuestion,
+          answer: newAnswer,
+          status: "select-hinter",
+          eliminated: eliminatedSocketIds,
+          roles: newRoles,
+          currentMaster: newMaster,
+          masterHistory: room.game.masterHistory.add(room.game.currentMaster),
+          hintHistory: [],
+          currentHinter: undefined,
+        },
       };
 
       await rooms.set(room.id, newState);
@@ -525,12 +599,31 @@ const makeGameClientState = (
   role: Role,
   game: ServerGameState,
 ): ClientGameState => {
-  const { question, round, answer, hinter, hintHistory, eliminated, status } =
-    game;
+  const {
+    question,
+    round,
+    answer,
+    currentHinter,
+    hintHistory,
+    eliminated,
+    status,
+    currentMaster,
+    masterHistory,
+  } = game;
 
   switch (role) {
     case "master": {
-      return { round, question, role, hinter, hintHistory, eliminated, status };
+      return {
+        round,
+        question,
+        role,
+        currentHinter,
+        hintHistory,
+        eliminated,
+        status,
+        currentMaster,
+        masterHistory,
+      };
     }
     case "red": {
       return {
@@ -538,10 +631,12 @@ const makeGameClientState = (
         question,
         answer,
         role,
-        hinter,
+        currentHinter,
         hintHistory,
         eliminated,
         status,
+        currentMaster,
+        masterHistory,
       };
     }
     case "blue": {
@@ -550,10 +645,12 @@ const makeGameClientState = (
         question,
         answer,
         role,
-        hinter,
+        currentHinter,
         hintHistory,
         eliminated,
         status,
+        currentMaster,
+        masterHistory,
       };
     }
   }
@@ -565,24 +662,21 @@ const calcScore = (): Record<SocketId, number> => {
 
 const assignRolesToPlayers = (
   players: SocketId[],
-  roles: Role[],
+  nonMasters?: Set<SocketId>,
 ): Record<SocketId, Role> => {
-  return players.reduce<Record<SocketId, Role>>(
-    (prev, curr) => ({ ...prev, [curr]: roles.pop() }),
-    {},
-  );
-};
+  const result: Record<SocketId, Role> = {};
+  const assigned = new Set<Role>();
 
-const generateRoles = (playerNums: number): Result<Role[], string> => {
-  if (playerNums < 3) {
-    return err("Failed to generate roles, minimum player is 3");
-  }
+  players.forEach((p) => {
+    const pool: Role[] = [];
+    if (!assigned.has("master") && (nonMasters?.has(p) || true))
+      pool.push("master");
+    if (!assigned.has("blue")) pool.push("blue");
+    const needMore = players.length - Object.keys(result).length - pool.length;
+    Array.from({ length: needMore }).forEach(() => pool.push("red"));
+    result[p] = pool[randomInt(0, pool.length - 1)];
+    assigned.add(result[p]);
+  });
 
-  const requiredRoles: Role[] = ["master", "red", "blue"];
-
-  const additionalRoles: Role[] = Array.from({
-    length: playerNums - requiredRoles.length,
-  }).map(() => "blue");
-
-  return ok([...requiredRoles, ...additionalRoles]);
+  return result;
 };
