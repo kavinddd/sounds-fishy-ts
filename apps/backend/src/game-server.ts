@@ -15,7 +15,6 @@ import {
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
 import { okAsync, ResultAsync } from "neverthrow";
-import { randomInt } from "crypto";
 import { rooms, sockets } from "./store";
 
 export type { IoServer } from "@sounds-fishy/shared";
@@ -253,6 +252,10 @@ const attachIoServerEventListeners = (io: IoServer) => {
 
       if (room.hostId !== socket.data.id) {
         return ack(ackErr("NOT_HOST"));
+      }
+
+      if (room.players.length < 3) {
+        return ack(ackErr("NOT_ENOUGH"));
       }
 
       const roles = assignRolesToPlayers(room.players, new Set());
@@ -550,7 +553,7 @@ const questions: Array<[string, string]> = [
 ];
 
 const randomProblem = (exclude?: Set<string>): [string, string] => {
-  return questions[randomInt(0, questions.length - 1)];
+  return questions[Math.floor(Math.random() * questions.length)];
 };
 
 const broadcastClientState = (
@@ -664,18 +667,31 @@ const assignRolesToPlayers = (
   players: SocketId[],
   nonMasters?: Set<SocketId>,
 ): Record<SocketId, Role> => {
+  const pool: Role[] = ["master", "blue"];
+
+  for (let i = 0; i < players.length - 2; i++) {
+    pool.push("red");
+  }
+
   const result: Record<SocketId, Role> = {};
-  const assigned = new Set<Role>();
+  const assignedIndices = new Set<number>();
 
   players.forEach((p) => {
-    const pool: Role[] = [];
-    if (!assigned.has("master") && (nonMasters?.has(p) || true))
-      pool.push("master");
-    if (!assigned.has("blue")) pool.push("blue");
-    const needMore = players.length - Object.keys(result).length - pool.length;
-    Array.from({ length: needMore }).forEach(() => pool.push("red"));
-    result[p] = pool[randomInt(0, pool.length - 1)];
-    assigned.add(result[p]);
+    const availableIndices: number[] = [];
+    pool.forEach((_, i) => {
+      if (!assignedIndices.has(i)) {
+        availableIndices.push(i);
+      }
+    });
+
+    if (availableIndices.length === 0) {
+      throw new Error("No available roles in pool");
+    }
+
+    const randomIdx = Math.floor(Math.random() * availableIndices.length);
+    const chosenIndex = availableIndices[randomIdx];
+    result[p] = pool[chosenIndex];
+    assignedIndices.add(chosenIndex);
   });
 
   return result;

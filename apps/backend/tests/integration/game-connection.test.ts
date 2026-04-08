@@ -17,6 +17,7 @@ import {
   HostError,
   JoinError,
   RoomId,
+  SelectHinterError,
   SocketId,
   SocketState,
   StartError,
@@ -288,6 +289,84 @@ describe("Test IO connection ", () => {
       success: false,
       code: "NOT_HOST",
     } satisfies StartError);
+  });
+
+  it("can select hinter", async () => {
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const p3 = await newSocket();
+    const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+    await p1.emitWithAck("game:start");
+
+    const room = (await rooms.get(roomId))._unsafeUnwrap();
+    const masterSocketId = room.game.currentMaster;
+
+    const masterSocket = [p1, p2, p3].find(
+      (s) => s.id === masterSocketId,
+    )!;
+    const nonMasterSocket = [p1, p2, p3].find(
+      (s) => s.id !== masterSocketId,
+    )!;
+
+    const selectHinterAck = await masterSocket.emitWithAck(
+      "game:select-hinter",
+      nonMasterSocket.id,
+    );
+    expect(selectHinterAck.success).toBe(true);
+  });
+
+  it("cannot select hinter if not master", async () => {
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const p3 = await newSocket();
+    const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+    await p1.emitWithAck("game:start");
+
+    const room = (await rooms.get(roomId))._unsafeUnwrap();
+    const masterSocketId = room.game.currentMaster;
+
+    const nonMasterSocket = [p1, p2, p3].find(
+      (s) => s.id !== masterSocketId,
+    )!;
+    const targetSocket = [p1, p2, p3].find(
+      (s) => s.id !== masterSocketId && s.id !== nonMasterSocket.id,
+    )!;
+
+    const selectHinterAck = await nonMasterSocket.emitWithAck(
+      "game:select-hinter",
+      targetSocket.id,
+    );
+    expect(selectHinterAck).toMatchObject({
+      success: false,
+      code: "NOT_MASTER",
+    } satisfies SelectHinterError);
+  });
+
+  it("cannot select hinter if already in hint history", async () => {
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const p3 = await newSocket();
+    const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+    await p1.emitWithAck("game:start");
+
+    const room = (await rooms.get(roomId))._unsafeUnwrap();
+    const masterSocketId = room.game.currentMaster;
+
+    const masterSocket = [p1, p2, p3].find(
+      (s) => s.id === masterSocketId,
+    )!;
+    const p2Socket = [p1, p2, p3].find(
+      (s) => s.id !== masterSocketId,
+    )!;
+
+    const selectHinterAck = await masterSocket.emitWithAck(
+      "game:select-hinter",
+      p2Socket.id,
+    );
+    expect(selectHinterAck.success).toBe(true);
   });
 });
 
