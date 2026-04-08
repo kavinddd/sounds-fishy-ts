@@ -7,7 +7,16 @@ import type { Chat } from "@sounds-fishy/shared";
 const DEV_MODE = import.meta.env.DEV;
 
 export function RoomPage() {
-  const { playerId, roomId, roomState, chats, isHost, sendChat, leaveRoom, startGame } = useSocket();
+  const {
+    playerId,
+    roomId,
+    roomState,
+    chats,
+    isHost,
+    sendChat,
+    leaveRoom,
+    startGame,
+  } = useSocket();
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showDevInfo, setShowDevInfo] = useState(false);
@@ -52,13 +61,11 @@ export function RoomPage() {
   return (
     <div className="h-[100dvh] flex flex-col lg:flex-row overflow-hidden">
       <Bubbles />
-      
+
       <header className="flex-shrink-0 bg-surface/80 backdrop-blur-sm shadow-md px-3 py-2 lg:hidden">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="font-display text-lg font-bold text-accent">
-              Room
-            </h1>
+            <h1 className="font-display text-lg font-bold text-accent">Room</h1>
             {roomId && (
               <button
                 onClick={handleCopyCode}
@@ -66,15 +73,35 @@ export function RoomPage() {
               >
                 {copied ? (
                   <>
-                    <svg className="w-3 h-3 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="w-3 h-3 lg:w-5 lg:h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
                     <span className="text-xs lg:text-base">Copied!</span>
                   </>
                 ) : (
                   <>
-                    <svg className="w-3 h-3 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    <svg
+                      className="w-3 h-3 lg:w-5 lg:h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
                     </svg>
                     <span className="text-xs lg:text-sm">{roomId}</span>
                   </>
@@ -87,12 +114,26 @@ export function RoomPage() {
               onClick={() => setShowPlayers(true)}
               className="flex items-center gap-1 px-2 py-1.5 text-sm bg-background rounded hover:bg-background/80 transition-colors"
             >
-              <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              <svg
+                className="w-4 h-4 lg:w-5 lg:h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                />
               </svg>
               <span className="text-xs lg:text-sm">{players.length}</span>
             </button>
-            <Button onClick={leaveRoom} variant="outline" className="px-3 py-1.5 text-sm">
+            <Button
+              onClick={leaveRoom}
+              variant="outline"
+              className="px-3 py-1.5 text-sm"
+            >
               Leave
             </Button>
           </div>
@@ -103,7 +144,11 @@ export function RoomPage() {
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h1 className="font-display text-xl font-bold text-accent">Room</h1>
-            <Button onClick={leaveRoom} variant="outline" className="px-3 py-1.5 text-sm">
+            <Button
+              onClick={leaveRoom}
+              variant="outline"
+              className="px-3 py-1.5 text-sm"
+            >
               Leave
             </Button>
           </div>
@@ -112,24 +157,42 @@ export function RoomPage() {
               onClick={handleCopyCode}
               className="w-full bg-background rounded-lg p-3 hover:bg-background/80 transition-colors text-left"
             >
-              <p className="text-xs lg:text-sm text-text-light mb-1">Room Code</p>
+              <p className="text-xs lg:text-sm text-text-light mb-1">
+                Room Code
+              </p>
               <div className="flex items-center justify-between">
-                <p className="text-lg font-mono font-bold text-text">{roomId}</p>
+                <p className="text-lg font-mono font-bold text-text">
+                  {roomId}
+                </p>
                 {copied ? (
-                  <span className="text-xs lg:text-sm text-green-600">Copied!</span>
+                  <span className="text-xs lg:text-sm text-green-600">
+                    Copied!
+                  </span>
                 ) : (
-                  <svg className="w-4 h-4 lg:w-5 lg:h-5 text-text-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  <svg
+                    className="w-4 h-4 lg:w-5 lg:h-5 text-text-light"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
                   </svg>
                 )}
               </div>
             </button>
           )}
         </div>
-        
+
         <div className="p-4 flex-1 overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-text">Players ({players.length})</h2>
+            <h2 className="font-semibold text-text">
+              Players ({players.length})
+            </h2>
             {isHost && (
               <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">
                 You are host
@@ -151,7 +214,9 @@ export function RoomPage() {
                     </div>
                     <span className="text-sm lg:text-base text-text">
                       Player {player.slice(0, 4)}
-                      {isCurrentPlayer && <span className="text-text-light"> (you)</span>}
+                      {isCurrentPlayer && (
+                        <span className="text-text-light"> (you)</span>
+                      )}
                     </span>
                   </div>
                   {isPlayerHost && (
@@ -163,13 +228,10 @@ export function RoomPage() {
               );
             })}
           </ul>
-          
+
           {isHost && (
             <div className="mt-6 pt-4 border-t border-border">
-              <Button
-                onClick={handleStartGame}
-                className="w-full"
-              >
+              <Button onClick={handleStartGame} className="w-full">
                 Start Game
               </Button>
             </div>
@@ -216,7 +278,8 @@ export function RoomPage() {
               {chats.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-text-light">
                   <p className="text-center text-sm">
-                    No messages yet.<br />
+                    No messages yet.
+                    <br />
                     Say hello!
                   </p>
                 </div>
@@ -257,13 +320,23 @@ export function RoomPage() {
               placeholder="Type..."
               className="flex-1 px-3 py-2.5 rounded-xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors text-base"
             />
-            <Button 
-              onClick={handleSend} 
-              disabled={!message.trim() || isSending} 
+            <Button
+              onClick={handleSend}
+              disabled={!message.trim() || isSending}
               className="px-4 lg:px-6 py-2.5 text-base"
             >
-              <svg className="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <svg
+                className="w-4 h-4 lg:w-5 lg:h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                />
               </svg>
             </Button>
           </div>
@@ -271,29 +344,41 @@ export function RoomPage() {
       </main>
 
       {showPlayers && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center lg:hidden"
           onClick={() => setShowPlayers(false)}
         >
-          <div 
+          <div
             className="bg-surface w-full max-w-md max-h-[70vh] rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-text">Players ({players.length})</h2>
+                <h2 className="font-semibold text-text">
+                  Players ({players.length})
+                </h2>
                 {isHost && (
                   <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">
                     Host
                   </span>
                 )}
               </div>
-              <button 
+              <button
                 onClick={() => setShowPlayers(false)}
                 className="p-1 hover:bg-background rounded"
               >
-                <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5 lg:w-6 lg:h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -322,10 +407,7 @@ export function RoomPage() {
               </ul>
               {isHost && (
                 <div className="mt-4 pt-4 border-t border-border">
-                  <Button
-                    onClick={handleStartGame}
-                    className="w-full"
-                  >
+                  <Button onClick={handleStartGame} className="w-full">
                     Start Game
                   </Button>
                 </div>

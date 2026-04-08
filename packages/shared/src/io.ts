@@ -33,7 +33,11 @@ export type ClientState = BaseRoomState &
 // GameState
 type BaseGameState = {
   round: number;
+  status: "select-hinter" | "eliminate" | "hint";
   question: string;
+  hintHistory: HintHistory[];
+  hinter?: SocketId;
+  eliminated: Set<SocketId>;
 };
 
 export type ServerGameState = BaseGameState & {
@@ -41,6 +45,7 @@ export type ServerGameState = BaseGameState & {
   questionHistory: Set<String>;
   roles: Record<SocketId, Role>;
 };
+
 export type ClientGameState = BaseGameState &
   (
     | { role: "master" }
@@ -49,6 +54,12 @@ export type ClientGameState = BaseGameState &
   );
 
 export type Role = ClientGameState["role"];
+
+export interface HintHistory {
+  hint: string;
+  hinter: SocketId;
+}
+
 export type SocketData = {
   id: SocketId;
   // state: SocketState;

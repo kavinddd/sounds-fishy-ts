@@ -275,6 +275,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
           answer,
           questionHistory: new Set([question]),
           roles,
+          hintHistory: [],
+          eliminated: new Set(),
+          status: "select-hinter",
         },
       };
 
@@ -290,6 +293,174 @@ const attachIoServerEventListeners = (io: IoServer) => {
         status: "in-game",
         roomId: state.roomId,
       });
+
+      return ack(ackOk());
+    });
+
+    socket.on("game:select-hinter", async (socketId, ack) => {
+      const stateResult = await sockets.get(socketId);
+
+      if (stateResult.isErr()) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const state = stateResult.value;
+
+      if (state.status === "idle") {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const roomResult = await rooms.get(state.roomId);
+
+      if (roomResult.isErr()) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const room = roomResult.value;
+
+      if (!room.isPlaying) {
+        logger.info("Room is not playing");
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const role = room.game.roles[socket.data.id];
+
+      if (role !== "master") {
+        logger.info("Non-master socket tried to select hinter");
+        return ack(ackErr("NOT_MASTER"));
+      }
+
+      if (room.game.hintHistory.some((h) => h.hinter === socket.data.id)) {
+        logger.info("This socket is already hintHistory");
+        return ack(ackErr("ALREADY"));
+      }
+
+      const newRoom: ServerState = {
+        ...room,
+        game: {
+          ...room.game,
+          // hintHistory: room.game.hintHistory.add(socket.data.id),
+          hinter: socket.data.id,
+        },
+      };
+
+      await rooms.set(room.id, newRoom);
+      await broadcastClientState(newRoom, io);
+
+      return ack(ackOk());
+    });
+
+    socket.on("game:hint", async (hint, ack) => {
+      const stateResult = await sockets.get(socket.data.id);
+
+      if (stateResult.isErr()) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const state = stateResult.value;
+
+      if (state.status === "idle") {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const roomResult = await rooms.get(state.roomId);
+
+      if (roomResult.isErr()) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const room = roomResult.value;
+
+      if (!room.isPlaying) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const role = room.game.roles[socket.data.id];
+
+      if (room.game.hinter !== socket.data.id) {
+        return ack(ackErr("NOT_HINTER"));
+      }
+
+      const isHintAnAnswer =
+        room.game.answer.toLowerCase() === hint.trim().toLowerCase();
+
+      switch (role) {
+        case "master":
+          return ack(ackErr("UNEXPECTED"));
+        case "red":
+          if (isHintAnAnswer) return ack(ackErr("ANSWER"));
+          break;
+
+        case "blue":
+          if (!isHintAnAnswer) return ack(ackErr("ANSWER"));
+          break;
+      }
+
+      const newState: ServerState = {
+        ...room,
+        game: {
+          ...room.game,
+          hintHistory: [
+            ...room.game.hintHistory,
+            { hinter: socket.data.id, hint },
+          ],
+          hinter: undefined,
+        },
+      };
+
+      await rooms.set(room.id, newState);
+      await broadcastClientState(newState, io);
+
+      return ack(ackOk());
+    });
+
+    socket.on("game:eliminate", async (socketId, ack) => {
+      const stateResult = await sockets.get(socket.data.id);
+
+      if (stateResult.isErr()) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const state = stateResult.value;
+
+      if (state.status === "idle") {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const roomResult = await rooms.get(state.roomId);
+
+      if (roomResult.isErr()) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const room = roomResult.value;
+
+      if (!room.isPlaying) {
+        return ack(ackErr("UNEXPECTED"));
+      }
+
+      const role = room.game.roles[socket.data.id];
+
+      if (role !== "master") {
+        return ack(ackErr("NOT_MASTER"));
+      }
+
+      const eliminateRole = room.game.roles[socketId];
+
+      if (eliminateRole === "blue") {
+        logger.info("Game over");
+        // TODO: do something to let everyone know that the game is over
+        return ack(ackOk());
+      }
+
+      const eliminated = room.game.eliminated.add(socketId);
+      const newState: ServerState = {
+        ...room,
+        game: { ...room.game, eliminated },
+      };
+
+      await rooms.set(room.id, newState);
+      await broadcastClientState(newState, io);
 
       return ack(ackOk());
     });
@@ -312,11 +483,6 @@ const broadcastClientState = (
   room: ServerState,
   io: IoServer,
 ): ResultAsync<void, string> => {
-  // if (!room.isPlaying) {
-  //   return errAsync(
-  //     "Failed to broadcast game state dues to the game is not started",
-  //   );
-  // }
   return ResultAsync.fromPromise(
     io.in(room.id).fetchSockets(),
     () => "Failed to fetch sockets while broadcasting.",
@@ -359,44 +525,43 @@ const makeGameClientState = (
   role: Role,
   game: ServerGameState,
 ): ClientGameState => {
-  const { question, round, answer } = game;
+  const { question, round, answer, hinter, hintHistory, eliminated, status } =
+    game;
 
   switch (role) {
     case "master": {
-      return { round, question, role };
+      return { round, question, role, hinter, hintHistory, eliminated, status };
     }
     case "red": {
-      return { round, question, answer, role };
+      return {
+        round,
+        question,
+        answer,
+        role,
+        hinter,
+        hintHistory,
+        eliminated,
+        status,
+      };
     }
     case "blue": {
-      return { round, question, answer, role };
+      return {
+        round,
+        question,
+        answer,
+        role,
+        hinter,
+        hintHistory,
+        eliminated,
+        status,
+      };
     }
   }
 };
 
-// const publishGameStates = <R extends Role>(
-//   room: RoomState,
-//   role: R,
-// ): Result<ClientGameState<R>, string> => {
-//   if (!room.isPlaying) {
-//     return err("The game was not even started. Please calm down.");
-//   }
-//
-//   const game = room.game;
-//
-//   // return createClientGameState({ role:  })
-//
-//   return ok({
-//     round: game.round,
-//     question: game.question,
-//     role,
-//   });
-// };
-//
-// function createClientGameState<R extends Role>(state: ClientGameState<R>) {
-//   return state;
-// }
-//
+const calcScore = (): Record<SocketId, number> => {
+  return {};
+};
 
 const assignRolesToPlayers = (
   players: SocketId[],
@@ -415,9 +580,9 @@ const generateRoles = (playerNums: number): Result<Role[], string> => {
 
   const requiredRoles: Role[] = ["master", "red", "blue"];
 
-  const additionalRoles: Role[] = Array.of(
-    playerNums - requiredRoles.length,
-  ).map(() => "blue");
+  const additionalRoles: Role[] = Array.from({
+    length: playerNums - requiredRoles.length,
+  }).map(() => "blue");
 
   return ok([...requiredRoles, ...additionalRoles]);
 };

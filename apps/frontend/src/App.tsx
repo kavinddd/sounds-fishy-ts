@@ -6,7 +6,7 @@ import { RoomPage } from "./components/RoomPage";
 function AppContent() {
   const { status } = useSocket();
 
-  if (status === "in-room") {
+  if (status === "in-room" || status === "in-game") {
     return <RoomPage />;
   }
 
