@@ -14,6 +14,7 @@ import {
   Chat,
   ClientSocket,
   ClientState,
+  EliminateError,
   HintError,
   HostError,
   JoinError,
@@ -409,6 +410,45 @@ describe("Test IO connection ", () => {
         success: false,
         code: "UNEXPECTED",
       } satisfies HintError);
+    });
+  });
+
+  describe("game:eliminate", () => {
+    it("cannot eliminate if not master", async () => {
+      const p1 = await newSocket();
+      const p2 = await newSocket();
+      const p3 = await newSocket();
+      const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+      await p1.emitWithAck("game:start");
+
+      const room = (await rooms.get(roomId))._unsafeUnwrap();
+      const masterSocketId = room.game.currentMaster;
+
+      const nonMasterSocket = [p1, p2, p3].find(
+        (s) => s.id !== masterSocketId,
+      )!;
+
+      const eliminateAck = await nonMasterSocket.emitWithAck(
+        "game:eliminate",
+        p2.id,
+      );
+      expect(eliminateAck).toMatchObject({
+        success: false,
+        code: "NOT_MASTER",
+      } satisfies EliminateError);
+    });
+
+    it("cannot eliminate if room is not playing", async () => {
+      const p1 = await newSocket();
+      const p2 = await newSocket();
+      const roomId = (await createRoom([p1, p2]))._unsafeUnwrap();
+
+      const eliminateAck = await p1.emitWithAck("game:eliminate", p2.id);
+      expect(eliminateAck).toMatchObject({
+        success: false,
+        code: "UNEXPECTED",
+      } satisfies EliminateError);
     });
   });
 });
