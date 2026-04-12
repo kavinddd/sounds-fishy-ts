@@ -35,17 +35,27 @@ type BaseGameState = {
   round: number;
   status: "select-hinter" | "eliminate" | "hint";
   question: string;
-  hintHistory: HintHistory[];
+  hints: HintHistory[];
   currentHinter?: SocketId;
   eliminated: Set<SocketId>;
   currentMaster: SocketId;
-  masterHistory: Set<SocketId>;
+  currentScore: Record<SocketId, number>;
 };
 
 export type ServerGameState = BaseGameState & {
   answer: string;
   questionHistory: Set<String>;
   roles: Record<SocketId, Role>;
+  roundHistory: Round[];
+};
+
+export type Round = {
+  round: number;
+  question: string;
+  master: SocketId;
+  blueFish: SocketId;
+  roles: Record<SocketId, Role>;
+  eliminated: Set<SocketId>;
 };
 
 export type ClientGameState = BaseGameState &

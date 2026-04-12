@@ -9,6 +9,7 @@ import {
   IoServer,
   Role,
   RoomId,
+  Round,
   ServerGameState,
   ServerState,
   SocketId,
@@ -264,25 +265,43 @@ const attachIoServerEventListeners = (io: IoServer) => {
         ([_, role]) => role === "master",
       )?.[0] as SocketId;
 
-      if (!master) {
+      const blueFish = Object.entries(roles).find(
+        ([_, role]) => role === "blue",
+      )?.[0] as SocketId;
+
+      if (!master || !blueFish) {
         return ack(ackErr("UNEXPECTED"));
       }
       const [question, answer] = randomProblem();
+
+      const round = 1;
+      const questionHistory = new Set([question]);
+      const eliminated = new Set<SocketId>();
 
       const newRoom: ServerState = {
         ...room,
         isPlaying: true,
         game: {
-          round: 1,
+          round,
           question,
           answer,
-          questionHistory: new Set([question]),
+          questionHistory,
+          eliminated,
           roles,
-          hintHistory: [],
-          eliminated: new Set(),
+          hints: [],
           status: "select-hinter",
-          masterHistory: new Set(),
           currentMaster: master,
+          currentHinter: undefined,
+          roundHistory: [
+            { round: 1, eliminated, roles, blueFish, master, question },
+          ],
+          currentScore: room.players.reduce<Record<SocketId, number>>(
+            (prev, curr) => {
+              prev[curr] = 0;
+              return prev;
+            },
+            {},
+          ),
         },
       };
 
@@ -335,7 +354,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("NOT_MASTER"));
       }
 
-      if (room.game.hintHistory.some((h) => h.hinter === socket.data.id)) {
+      if (room.game.hints.some((h) => h.hinter === socket.data.id)) {
         logger.info("This socket is already hintHistory");
         return ack(ackErr("ALREADY"));
       }
@@ -402,7 +421,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
       }
 
       const hintHistory = [
-        ...room.game.hintHistory,
+        ...room.game.hints,
         { hinter: socket.data.id, hint },
       ];
 
@@ -416,7 +435,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         ...room,
         game: {
           ...room.game,
-          hintHistory,
+          hints: hintHistory,
           status: isEveryoneHint ? "eliminate" : "select-hinter",
           currentHinter: undefined,
         },
@@ -460,84 +479,44 @@ const attachIoServerEventListeners = (io: IoServer) => {
       }
 
       const eliminatedRole = room.game.roles[socketId];
-
-      // this can end multiple ways
-      // 1. next round => find new masters, whether win or lose
-      // 2. the game is done => if everyone is already a master
-      // so the flow should be
-      // 1. decide win or lose, save the score
-      // 2. decide if next round or the game is done
-
-      if (eliminatedRole === "blue") {
-        logger.info("Game over");
-
-        // TODO: do something to let everyone know that the game is over, continue next round
-
-        // TODO: or, if every one is already being a master, the game is done
-        const newState = room;
-        await rooms.set(room.id, newState);
-        await broadcastClientState(newState, io);
-
-        return ack(ackOk());
-      }
-
       const eliminatedSocketIds = room.game.eliminated.add(socketId);
-      const redFishSocketIds = Object.entries(room.game.roles)
+
+      const allRedFishSocketIds = Object.entries(room.game.roles)
         .filter(([_, role]) => role === "red")
         .map(([id, _]) => id as SocketId);
 
-      const isAllRedFishEliminated = redFishSocketIds.every(
+      const isAllRedFishEliminated = allRedFishSocketIds.every(
         eliminatedSocketIds.has,
       );
-
-      if (!isAllRedFishEliminated) {
-        const newState: ServerState = {
-          ...room,
-          game: {
-            ...room.game,
-            eliminated: eliminatedSocketIds,
-          },
-        };
-
-        await rooms.set(room.id, newState);
-        await broadcastClientState(newState, io);
-
-        return ack(ackOk());
-      }
-
-      const [newQuestion, newAnswer] = randomProblem();
-
-      const newRoles = assignRolesToPlayers(
-        room.players,
-        room.game.masterHistory,
-      );
-
-      const newMaster = room.players.find((id) => newRoles[id] === "master");
-
-      if (!newMaster) {
-        logger.info("Failed to find new master.");
-        return ack(ackErr("UNEXPECTED"));
-      }
 
       const newState: ServerState = {
         ...room,
         game: {
-          round: room.game.round + 1,
-          questionHistory: room.game.questionHistory,
-          question: newQuestion,
-          answer: newAnswer,
-          status: "select-hinter",
-          eliminated: eliminatedSocketIds,
-          roles: newRoles,
-          currentMaster: newMaster,
-          masterHistory: room.game.masterHistory.add(room.game.currentMaster),
-          hintHistory: [],
-          currentHinter: undefined,
+          ...room.game,
+          currentScore: calcScore(room.players, room.game.roundHistory),
         },
       };
 
       await rooms.set(room.id, newState);
       await broadcastClientState(newState, io);
+
+      const isRoundEnding = eliminatedRole === "blue" || isAllRedFishEliminated;
+
+      if (isRoundEnding) {
+        // go next round
+        const nextRoundState: ServerState = {
+          ...newState,
+          game: {
+            ...room.game,
+            round: room.game.round + 1,
+            status: "select-hinter",
+          },
+        };
+        await rooms.set(room.id, newState);
+        await broadcastClientState(newState, io);
+
+        return ack(ackOk());
+      }
 
       return ack(ackOk());
     });
@@ -553,7 +532,10 @@ const questions: Array<[string, string]> = [
 ];
 
 const randomProblem = (exclude?: Set<string>): [string, string] => {
-  return questions[Math.floor(Math.random() * questions.length)];
+  const remainingQuestions = questions.filter(
+    ([q, _]) => exclude?.has(q) || true,
+  );
+  return remainingQuestions[randomInt(0, remainingQuestions.length - 1)];
 };
 
 const broadcastClientState = (
@@ -589,7 +571,7 @@ const makeClientState = (
   }
 
   const role = room.game.roles[socketId];
-  const game = makeGameClientState(role, room.game);
+  const game = makeGameClientState(role, room.game, room.players);
 
   return {
     ...state,
@@ -601,66 +583,68 @@ const makeClientState = (
 const makeGameClientState = (
   role: Role,
   game: ServerGameState,
+  players: SocketId[],
 ): ClientGameState => {
-  const {
-    question,
-    round,
-    answer,
-    currentHinter,
-    hintHistory,
-    eliminated,
-    status,
-    currentMaster,
-    masterHistory,
-  } = game;
+  const { question, answer, roundHistory, ...state } = game;
 
   switch (role) {
     case "master": {
       return {
-        round,
         question,
         role,
-        currentHinter,
-        hintHistory,
-        eliminated,
-        status,
-        currentMaster,
-        masterHistory,
+        ...state,
       };
     }
     case "red": {
       return {
-        round,
         question,
         answer,
         role,
-        currentHinter,
-        hintHistory,
-        eliminated,
-        status,
-        currentMaster,
-        masterHistory,
+        ...state,
       };
     }
     case "blue": {
       return {
-        round,
         question,
         answer,
         role,
-        currentHinter,
-        hintHistory,
-        eliminated,
-        status,
-        currentMaster,
-        masterHistory,
+        ...state,
       };
     }
   }
 };
 
-const calcScore = (): Record<SocketId, number> => {
-  return {};
+const calcScore = (
+  players: SocketId[],
+  rounds: Round[],
+): Record<SocketId, number> => {
+  const result: Record<SocketId, number> = {};
+
+  rounds.forEach((round) => {
+    const isMasterWin = !round.eliminated.has(round.blueFish);
+    if (isMasterWin) {
+      result[round.master] =
+        (result[round.master] ?? 0) + round.eliminated.size;
+      return;
+    }
+
+    const isBlueFishWin = round.eliminated.has(round.blueFish);
+    if (isBlueFishWin) {
+      result[round.blueFish] =
+        result[round.blueFish] ?? 0 + Math.max(2, round.eliminated.size - 1);
+      return;
+    }
+
+    const survivedRedFishIds = players.filter((p) => {
+      return !round.eliminated.has(p) && round.roles[p] === "red";
+    });
+
+    survivedRedFishIds.forEach((id) => {
+      result[id] = (result[id] ?? 0) + 2;
+    });
+  });
+
+  return result;
 };
 
 const assignRolesToPlayers = (
