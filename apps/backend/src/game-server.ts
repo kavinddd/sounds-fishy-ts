@@ -355,7 +355,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("NOT_MASTER"));
       }
 
-      if (room.game.hints.some((h) => h.hinter === socket.data.id)) {
+      if (room.game.hints.some((h) => h.hinter === socketId)) {
         logger.info("This socket is already hintHistory");
         return ack(ackErr("ALREADY"));
       }
@@ -364,8 +364,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
         ...room,
         game: {
           ...room.game,
-          // hintHistory: room.game.hintHistory.add(socket.data.id),
-          currentHinter: socket.data.id,
+          currentHinter: socketId,
+          status: "hint",
         },
       };
 
@@ -430,7 +430,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
 
       const isEveryoneHint = room.players
         .filter((socketId) => room.game.currentMaster !== socketId)
-        .every(hintedSocketIds.includes);
+        .every((socketId) => hintedSocketIds.includes(socketId));
 
       const newState: ServerState = {
         ...room,
@@ -572,7 +572,7 @@ const makeClientState = (
   }
 
   const role = room.game.roles[socketId];
-  const game = makeGameClientState(role, room.game, room.players);
+  const game = makeGameClientState(role, room.game);
 
   return {
     ...state,
@@ -584,7 +584,7 @@ const makeClientState = (
 const makeGameClientState = (
   role: Role,
   game: ServerGameState,
-  players: SocketId[],
+  // players: SocketId[],
 ): ClientGameState => {
   const { question, answer, roundHistory: _, ...state } = game;
 
