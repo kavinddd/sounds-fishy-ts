@@ -17,6 +17,7 @@ import {
 import { logger } from "./telemetry";
 import { okAsync, ResultAsync } from "neverthrow";
 import { rooms, sockets } from "./store";
+import { randomInt } from "crypto";
 
 export type { IoServer } from "@sounds-fishy/shared";
 
@@ -585,7 +586,7 @@ const makeGameClientState = (
   game: ServerGameState,
   players: SocketId[],
 ): ClientGameState => {
-  const { question, answer, roundHistory, ...state } = game;
+  const { question, answer, roundHistory: _, ...state } = game;
 
   switch (role) {
     case "master": {
