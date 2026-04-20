@@ -24,9 +24,11 @@ import {
   SocketId,
   SocketState,
   StartError,
+  UnexpectedError,
 } from "@sounds-fishy/shared";
 import { errAsync, okAsync, ResultAsync, safeTry } from "neverthrow";
 import { rooms, sockets } from "../../src/store";
+import { logger } from "../../src/telemetry";
 
 let server: RunningServer;
 
@@ -286,10 +288,13 @@ describe("Test IO connection ", () => {
         switch (state.game.role) {
           case "red":
             hasRed = true;
+            break;
           case "blue":
             hasBlue = true;
+            break;
           case "master":
             hasMaster = true;
+            break;
         }
 
         if (state.game.role !== "master") {
@@ -545,6 +550,167 @@ describe("Test IO connection ", () => {
         code: "UNEXPECTED",
       } satisfies EliminateError);
     });
+
+    it("can eliminate some red fish then go to next round", async () => {
+      // 1. create room
+      const p1 = await newSocket();
+      const p2 = await newSocket();
+      const p3 = await newSocket();
+      const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+      // 2. start the game
+
+      await p1.emitWithAck("game:start");
+      const roomBeforeHint = (await rooms.get(roomId))._unsafeUnwrap();
+
+      assert(roomBeforeHint.isPlaying, "Room should be playing.");
+      expect(roomBeforeHint.game.status === "select-hinter").toBe(true);
+
+      await simulateHinting([p1, p2, p3], roomId);
+
+      // 3. eliminate red fish
+      const roomAfterHint = (await rooms.get(roomId))._unsafeUnwrap();
+      assert(roomAfterHint.isPlaying, "Room should be playing.");
+      expect(roomAfterHint.game.status === "eliminate").toBe(true);
+
+      const master = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "master",
+      );
+      assert(master, "Was unable to find socket id of master.");
+      const red = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "red",
+      );
+      assert(red, "Was unable to find socket id of red fish.");
+
+      // 4. listen to new state (expect next round state)
+      const clienStatePromise = listenClientStateOnce(master);
+      await master.emitWithAck("game:eliminate", red.id as SocketId);
+
+      // 5. check state
+      const serverState = (await rooms.get(roomId))._unsafeUnwrap();
+      const clientState = await clienStatePromise;
+
+      assert(serverState.isPlaying);
+      assert(clientState.isPlaying);
+
+      expect(serverState.game.status === "select-hinter");
+      expect(clientState.game.status === "select-hinter");
+
+      expect(serverState.game.hints.length).toEqual(2); // number of fish
+      expect(clientState.game.hints.length).toEqual(2); // number of fish
+
+      expect(serverState.game.round).toEqual(roomBeforeHint.game.round + 1);
+      expect(clientState.game.round).toEqual(roomBeforeHint.game.round + 1);
+
+      expect(serverState.game.currentHinter).toBeUndefined();
+      expect(clientState.game.currentHinter).toBeUndefined();
+
+      expect(serverState.game.roundHistory.length).toEqual(1);
+    });
+
+    it("can eliminate blue fish and go next round", async () => {
+      // 1. create room
+      const p1 = await newSocket();
+      const p2 = await newSocket();
+      const p3 = await newSocket();
+      const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+      // 2. start the game
+
+      await p1.emitWithAck("game:start");
+      const roomBeforeHint = (await rooms.get(roomId))._unsafeUnwrap();
+
+      assert(roomBeforeHint.isPlaying, "Room should be playing.");
+      expect(roomBeforeHint.game.status === "select-hinter").toBe(true);
+
+      await simulateHinting([p1, p2, p3], roomId);
+
+      // 3. eliminate red fish
+      const roomAfterHint = (await rooms.get(roomId))._unsafeUnwrap();
+      assert(roomAfterHint.isPlaying, "Room should be playing.");
+      expect(roomAfterHint.game.status === "eliminate").toBe(true);
+
+      const master = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "master",
+      );
+      assert(master, "Was unable to find socket id of master.");
+      const blue = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "blue",
+      );
+      assert(blue, "Was unable to find socket id of red fish.");
+
+      // 4. listen to new state (expect game over state)
+      const clienStatePromise = listenClientStateOnce(master);
+      await master.emitWithAck("game:eliminate", blue.id as SocketId);
+
+      // 5. check state
+      const serverState = (await rooms.get(roomId))._unsafeUnwrap();
+      const clientState = await clienStatePromise;
+
+      assert(serverState.isPlaying);
+      assert(clientState.isPlaying);
+
+      expect(serverState.game.status === "select-hinter");
+      expect(clientState.game.status === "select-hinter");
+
+      expect(serverState.game.hints.length).toEqual(2); // number of fish
+      expect(clientState.game.hints.length).toEqual(2); // number of fish
+
+      expect(serverState.game.round).toEqual(roomBeforeHint.game.round + 1);
+      expect(clientState.game.round).toEqual(roomBeforeHint.game.round + 1);
+
+      expect(serverState.game.currentHinter).toBeUndefined();
+      expect(clientState.game.currentHinter).toBeUndefined();
+
+      expect(serverState.game.roundHistory.length).toEqual(1);
+    });
+  });
+
+  it("can eliminate all red fish and game over", async () => {
+    // 1. create room
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const p3 = await newSocket();
+    const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+    // 2. start the game
+
+    await p1.emitWithAck("game:start");
+    const roomBeforeHint = (await rooms.get(roomId))._unsafeUnwrap();
+
+    assert(roomBeforeHint.isPlaying, "Room should be playing.");
+    expect(roomBeforeHint.game.status === "select-hinter").toBe(true);
+
+    // 3. eliminate red fish
+    let isGameOver = false;
+    while (!isGameOver) {
+      const hinting = await simulateHinting([p1, p2, p3], roomId);
+      if (hinting.isErr())
+        throw new Error(`Failed to simulate hinting: ${hinting.error}`);
+
+      const roomAfterHint = (await rooms.get(roomId))._unsafeUnwrap();
+      assert(roomAfterHint.isPlaying, "Room should be playing.");
+      expect(roomAfterHint.game.status === "eliminate").toBe(true);
+      const master = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "master",
+      );
+      assert(master, "Was unable to find socket id of master.");
+      const red = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "red",
+      );
+      assert(red, "Was unable to find socket id of red fish.");
+      // 4. listen to new state (expect game over state)
+      // game over = not playing anymore
+      // const clienStatePromise = listenClientStateOnce(master);
+      await master.emitWithAck("game:eliminate", red.id as SocketId);
+
+      // 5. check state
+      const serverState = (await rooms.get(roomId))._unsafeUnwrap();
+      // const clientState = await clienStatePromise;
+      isGameOver = !serverState.isPlaying;
+    }
+
+    expect(isGameOver).toBeTruthy();
   });
 });
 
@@ -581,6 +747,7 @@ const createRoom = (
 };
 
 // listen to room:sync once
+// call this before invoke events
 const listenClientStateOnce = (socket: ClientSocket): Promise<ClientState> =>
   new Promise<ClientState>((resolve) => {
     socket.once("room:sync", (state) => {
@@ -591,3 +758,57 @@ const listenClientStateOnce = (socket: ClientSocket): Promise<ClientState> =>
 const listenClientsStateOnce = (
   sockets: ClientSocket[],
 ): Promise<ClientState[]> => Promise.all(sockets.map(listenClientStateOnce));
+
+// let every fish hint in this round
+// at the funcion finishes, the room should be in eliminate phase
+const simulateHinting = (
+  sockets: ClientSocket[],
+  roomId: RoomId,
+): ResultAsync<
+  void,
+  UnexpectedError["code"] | SelectHinterError["code"] | HintError["code"]
+> => {
+  const socketMap = sockets.reduce<Record<SocketId, ClientSocket>>((acc, p) => {
+    acc[p.id as SocketId] = p;
+    return acc;
+  }, {});
+
+  return safeTry(async function* () {
+    const room = yield* rooms.get(roomId).mapErr(() => "UNEXPECTED" as const);
+
+    assert(room.isPlaying, "Room is not playing");
+
+    const remainingFishIds = room.players.filter(
+      (socketId) =>
+        room.game.roles[socketId] !== "master" &&
+        !room.game.eliminated.has(socketId),
+    );
+
+    const masterId = room.players.find(
+      (socketId) => room.game.roles[socketId] === "master",
+    );
+
+    assert(masterId);
+
+    for (const fishId of remainingFishIds) {
+      const fishSocket = socketMap[fishId];
+      const fishRole = room.game.roles[fishId];
+      const masterSocket = socketMap[masterId];
+
+      yield* ResultAsync.fromPromise(
+        masterSocket.emitWithAck("game:select-hinter", fishId),
+        () => "UNEXPECTED" as const,
+      ).andThen((ack) => (ack.success ? okAsync(ack) : errAsync(ack.code)));
+
+      yield* ResultAsync.fromPromise(
+        fishSocket.emitWithAck(
+          "game:hint",
+          fishRole === "blue" ? room.game.answer : "random hint",
+        ),
+        () => "UNEXPECTED" as const,
+      ).andThen((ack) => (ack.success ? okAsync(ack) : errAsync(ack.code)));
+    }
+
+    return okAsync();
+  });
+};

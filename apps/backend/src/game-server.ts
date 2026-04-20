@@ -385,24 +385,28 @@ const attachIoServerEventListeners = (io: IoServer) => {
       const state = stateResult.value;
 
       if (state.status === "idle") {
+        logger.info("Failed to hint, the room was idling.");
         return ack(ackErr("UNEXPECTED"));
       }
 
       const roomResult = await rooms.get(state.roomId);
 
       if (roomResult.isErr()) {
+        logger.info("Failed to hint, cannot fetch the room state.");
         return ack(ackErr("UNEXPECTED"));
       }
 
       const room = roomResult.value;
 
       if (!room.isPlaying) {
+        logger.info("Failed to hint, room was not playing.");
         return ack(ackErr("UNEXPECTED"));
       }
 
       const role = room.game.roles[socket.data.id];
 
       if (room.game.currentHinter !== socket.data.id) {
+        logger.info("Failed to hint, you are not current hinter.");
         return ack(ackErr("NOT_HINTER"));
       }
 
@@ -411,6 +415,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
 
       switch (role) {
         case "master":
+          logger.info("Failed to hint, you are master.");
           return ack(ackErr("UNEXPECTED"));
         case "red":
           if (isHintAnAnswer) return ack(ackErr("ANSWER"));
@@ -429,7 +434,11 @@ const attachIoServerEventListeners = (io: IoServer) => {
       const hintedSocketIds = hintHistory.map((h) => h.hinter);
 
       const isEveryoneHint = room.players
-        .filter((socketId) => room.game.currentMaster !== socketId)
+        .filter(
+          (socketId) =>
+            room.game.currentMaster !== socketId &&
+            !room.game.eliminated.has(socketId),
+        )
         .every((socketId) => hintedSocketIds.includes(socketId));
 
       const newState: ServerState = {
@@ -486,8 +495,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
         .filter(([_, role]) => role === "red")
         .map(([id, _]) => id as SocketId);
 
-      const isAllRedFishEliminated = allRedFishSocketIds.every(
-        eliminatedSocketIds.has,
+      const isAllRedFishEliminated = allRedFishSocketIds.every((id) =>
+        eliminatedSocketIds.has(id),
       );
 
       const newState: ServerState = {
@@ -502,6 +511,21 @@ const attachIoServerEventListeners = (io: IoServer) => {
       await broadcastClientState(newState, io);
 
       const isRoundEnding = eliminatedRole === "blue" || isAllRedFishEliminated;
+      const masters = new Set<SocketId>(
+        newState.game.roundHistory.map((round) => round.master),
+      );
+      const isGameEnding =
+        isRoundEnding && newState.players.every((p) => masters.has(p));
+
+      if (isGameEnding) {
+        const endGameState: ServerState = {
+          ...newState,
+          isPlaying: false,
+        };
+        await rooms.set(room.id, endGameState);
+        await broadcastClientState(endGameState, io);
+        return ack(ackOk());
+      }
 
       if (isRoundEnding) {
         // go next round
@@ -511,11 +535,11 @@ const attachIoServerEventListeners = (io: IoServer) => {
             ...room.game,
             round: room.game.round + 1,
             status: "select-hinter",
+            eliminated: new Set(),
           },
         };
-        await rooms.set(room.id, newState);
-        await broadcastClientState(newState, io);
-
+        await rooms.set(room.id, nextRoundState);
+        await broadcastClientState(nextRoundState, io);
         return ack(ackOk());
       }
 
