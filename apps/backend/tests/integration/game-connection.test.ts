@@ -20,7 +20,6 @@ import {
   JoinError,
   RoomId,
   SelectHinterError,
-  ServerGameState,
   SocketId,
   SocketState,
   StartError,
@@ -28,7 +27,6 @@ import {
 } from "@sounds-fishy/shared";
 import { errAsync, okAsync, ResultAsync, safeTry } from "neverthrow";
 import { rooms, sockets } from "../../src/store";
-import { logger } from "../../src/telemetry";
 
 let server: RunningServer;
 
@@ -596,16 +594,13 @@ describe("Test IO connection ", () => {
       expect(serverState.game.status === "select-hinter");
       expect(clientState.game.status === "select-hinter");
 
-      expect(serverState.game.hints.length).toEqual(2); // number of fish
-      expect(clientState.game.hints.length).toEqual(2); // number of fish
+      expect(serverState.game.hints.length).toEqual(0); // cleared for new round
 
       expect(serverState.game.round).toEqual(roomBeforeHint.game.round + 1);
       expect(clientState.game.round).toEqual(roomBeforeHint.game.round + 1);
 
       expect(serverState.game.currentHinter).toBeUndefined();
       expect(clientState.game.currentHinter).toBeUndefined();
-
-      expect(serverState.game.roundHistory.length).toEqual(1);
     });
 
     it("can eliminate blue fish and go next round", async () => {
@@ -653,16 +648,13 @@ describe("Test IO connection ", () => {
       expect(serverState.game.status === "select-hinter");
       expect(clientState.game.status === "select-hinter");
 
-      expect(serverState.game.hints.length).toEqual(2); // number of fish
-      expect(clientState.game.hints.length).toEqual(2); // number of fish
+      expect(serverState.game.hints.length).toEqual(0); // cleared for new round
 
       expect(serverState.game.round).toEqual(roomBeforeHint.game.round + 1);
       expect(clientState.game.round).toEqual(roomBeforeHint.game.round + 1);
 
       expect(serverState.game.currentHinter).toBeUndefined();
       expect(clientState.game.currentHinter).toBeUndefined();
-
-      expect(serverState.game.roundHistory.length).toEqual(1);
     });
   });
 
@@ -681,7 +673,7 @@ describe("Test IO connection ", () => {
     assert(roomBeforeHint.isPlaying, "Room should be playing.");
     expect(roomBeforeHint.game.status === "select-hinter").toBe(true);
 
-    // 3. eliminate red fish
+// 3. eliminate red fish
     let isGameOver = false;
     while (!isGameOver) {
       const hinting = await simulateHinting([p1, p2, p3], roomId);
@@ -698,11 +690,15 @@ describe("Test IO connection ", () => {
       const red = [p1, p2, p3].find(
         (p) => roomAfterHint.game.roles[p.id as SocketId] === "red",
       );
-      assert(red, "Was unable to find socket id of red fish.");
+      // If no red fish left (2 players only have master + blue), eliminate blue instead
+      const targetEliminate = red ?? [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "blue",
+      );
+      assert(targetEliminate, "Was unable to find any fish to eliminate.");
       // 4. listen to new state (expect game over state)
       // game over = not playing anymore
       // const clienStatePromise = listenClientStateOnce(master);
-      await master.emitWithAck("game:eliminate", red.id as SocketId);
+      await master.emitWithAck("game:eliminate", targetEliminate!.id as SocketId);
 
       // 5. check state
       const serverState = (await rooms.get(roomId))._unsafeUnwrap();

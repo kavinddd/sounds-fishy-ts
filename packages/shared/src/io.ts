@@ -44,7 +44,7 @@ type BaseGameState = {
 
 export type ServerGameState = BaseGameState & {
   answer: string;
-  questionHistory: Set<String>;
+  questionHistory: Set<string>;
   roles: Record<SocketId, Role>;
   roundHistory: Round[];
 };
