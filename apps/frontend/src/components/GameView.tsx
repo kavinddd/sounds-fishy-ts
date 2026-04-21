@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
 import { Bubbles } from "./Bubbles";
+import { ChatPanel } from "./ChatPanel";
 import type { Role, HintHistory } from "@sounds-fishy/shared";
 
 const DEV_MODE = import.meta.env.DEV;
@@ -44,15 +45,34 @@ export function GameView() {
     playerId,
     roomState,
     gameState,
+    chats,
     selectHinter,
     giveHint,
     eliminate,
     leaveRoom,
+    sendChat,
   } = useSocket();
 
   const [hintInput, setHintInput] = useState("");
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  const handleOpenChat = () => {
+    setShowChat(true);
+    setUnreadChatCount(0);
+  };
+
+  const handleCloseChat = () => {
+    setShowChat(false);
+  };
+
+  useEffect(() => {
+    if (!showChat && chats.length > 0) {
+      setUnreadChatCount((prev) => prev + 1);
+    }
+  }, [chats.length, showChat]);
 
   const players = roomState?.players ?? [];
   const eliminated = gameState?.eliminated ?? [];
@@ -244,6 +264,14 @@ export function GameView() {
               </div>
             </div>
           )}
+
+          <div className="flex-1 border-t border-border">
+            <ChatPanel
+              messages={chats}
+              currentPlayerId={playerId}
+              onSend={sendChat}
+            />
+          </div>
         </div>
 
         {DEV_MODE && (
@@ -510,13 +538,27 @@ export function GameView() {
                 Round {gameState?.round}
               </div>
             </div>
-            <button
-              onClick={() => setShowScoreboard(true)}
-              className="flex items-center gap-1 text-sm text-primary font-medium"
-            >
-              <span>🏆</span>
-              <span>Scores</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleOpenChat}
+                className="flex items-center gap-1 text-sm font-medium relative"
+              >
+                <span className={unreadChatCount > 0 ? "text-red-500" : "text-primary"}>💬</span>
+                <span className={unreadChatCount > 0 ? "text-red-500" : "text-primary"}>Chat</span>
+                {unreadChatCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                    {unreadChatCount > 9 ? "9+" : unreadChatCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setShowScoreboard(true)}
+                className="flex items-center gap-1 text-sm text-primary font-medium"
+              >
+                <span>🏆</span>
+                <span>Scores</span>
+              </button>
+            </div>
           </div>
           {myRole && (myRole === "red" || myRole === "blue") && (
             <p className="text-xs text-text-light">
@@ -574,6 +616,35 @@ export function GameView() {
                   {eliminated.length} player(s) eliminated
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {showChat && (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 lg:hidden"
+            onClick={handleCloseChat}
+          >
+            <div
+              className="bg-surface w-full max-w-sm h-[80vh] rounded-2xl shadow-xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <h2 className="text-lg font-bold text-text">💬 Chat</h2>
+                <button
+                  onClick={handleCloseChat}
+                  className="p-1 hover:bg-background rounded"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <ChatPanel
+                  messages={chats}
+                  currentPlayerId={playerId}
+                  onSend={sendChat}
+                />
+              </div>
             </div>
           </div>
         )}

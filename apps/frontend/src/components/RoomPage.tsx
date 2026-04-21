@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
 import { Bubbles } from "./Bubbles";
-import type { Chat } from "@sounds-fishy/shared";
+import { ChatPanel } from "./ChatPanel";
 
 const DEV_MODE = import.meta.env.DEV;
 
@@ -17,32 +17,9 @@ export function RoomPage() {
     leaveRoom,
     startGame,
   } = useSocket();
-  const [message, setMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showPlayers, setShowPlayers] = useState(false);
   const [copied, setCopied] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chats]);
-
-  const handleSend = async () => {
-    if (message.trim()) {
-      setIsSending(true);
-      await sendChat(message.trim());
-      setMessage("");
-      setIsSending(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   const handleStartGame = async () => {
     await startGame();
@@ -272,75 +249,11 @@ export function RoomPage() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 p-3 lg:p-4 pb-24 lg:pb-4 overflow-hidden">
-          <div className="h-full flex flex-col overflow-hidden max-w-5xl mx-auto w-full">
-            <div className="flex-1 overflow-y-auto space-y-2 pb-3 min-h-0">
-              {chats.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-text-light">
-                  <p className="text-center text-sm">
-                    No messages yet.
-                    <br />
-                    Say hello!
-                  </p>
-                </div>
-              ) : (
-                chats.map((chat: Chat, index: number) => {
-                  const isOwn = chat.from === playerId;
-                  return (
-                    <div
-                      key={index}
-                      className={`px-3 py-1.5 max-w-[85%] rounded-2xl ${
-                        isOwn
-                          ? "bg-primary ml-auto rounded-tr-sm"
-                          : "bg-secondary rounded-tl-sm"
-                      }`}
-                    >
-                      {!isOwn && (
-                        <p className="text-xs text-text-light mb-0.5">
-                          Player {chat.from.slice(0, 4)}
-                        </p>
-                      )}
-                      <p className="text-sm text-text">{chat.message}</p>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-        </div>
-
-        <div className="fixed bottom-0 left-0 right-0 bg-surface/80 backdrop-blur-sm p-3 lg:relative lg:bg-transparent lg:p-0 lg:mb-4 lg:px-4">
-          <div className="flex gap-2 max-w-3xl mx-auto">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type..."
-              className="flex-1 px-3 py-2.5 rounded-xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors text-base"
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!message.trim() || isSending}
-              className="px-4 lg:px-6 py-2.5 text-base"
-            >
-              <svg
-                className="w-4 h-4 lg:w-5 lg:h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
-            </Button>
-          </div>
-        </div>
+        <ChatPanel
+          messages={chats}
+          currentPlayerId={playerId}
+          onSend={sendChat}
+        />
       </main>
 
       {showPlayers && (

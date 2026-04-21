@@ -168,9 +168,40 @@ pnpm db:push      # Push schema
 pnpm db:studio    # Open Drizzle Studio
 ```
 
+### Frontend Testing
+Manual testing requires 3+ players:
+```bash
+# Terminal 1: Backend
+cd apps/backend && pnpm dev
+
+# Terminal 2: Frontend  
+cd apps/frontend && pnpm dev
+```
+
+## Game Flow (Frontend)
+
+The game has 3 phases in `gameState.status`:
+- `select-hinter`: Master selects a player to give a hint
+- `hint`: Selected player submits a hint (red fish must NOT say answer, blue fish MUST say answer)
+- `eliminate`: Master chooses who to eliminate
+
+When a round ends (blue eliminated or all red eliminated), new round starts with fresh roles.
+
+## Critical: Set Serialization
+
+**JavaScript Set does NOT serialize to JSON** - it becomes `{}`. 
+
+When sending data from server to client via Socket.IO:
+- Server uses `Set<SocketId>` internally (in `ServerGameState`)
+- Client must receive `SocketId[]` (in `ClientGameState`)
+- Convert Sets to Arrays in `makeGameClientState()` before broadcasting
+
+See `packages/shared/src/io.ts` for type definitions.
+
 ## Best Practices
 
-1. Run `pnpm typecheck` before committing
+1. Run `pnpm typecheck` before committing (both frontend and backend)
 2. Run `pnpm lint` to catch issues
 3. Use shared package for types used in both apps
 4. Keep components small and focused
+5. Always test with 3+ players for game flow verification
