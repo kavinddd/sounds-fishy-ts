@@ -115,6 +115,47 @@ apps/backend/tests/
 └── integration/ # Full HTTP/DB tests
 ```
 
+### Running Tests
+```bash
+# Run all tests (may be flaky - see notes below)
+cd apps/backend && pnpm vitest run
+
+# Run specific test by name pattern
+cd apps/backend && pnpm vitest run -t "game:eliminate"
+cd apps/backend && pnpm vitest run -t "can eliminate all red fish"
+
+# Run tests multiple times to check flakiness
+for i in 1 2 3 4 5; do
+  echo "Run $i:"
+  pnpm vitest run 2>&1 | grep -E "Tests" | tail -1
+done
+```
+
+### Flaky Tests: Socket.IO Broadcast Race
+
+Backend integration tests can be flaky due to async Socket.IO.
+After round-ending events, the server broadcasts TWICE:
+
+1. After elimination (status="eliminate", round=N)
+2. After round transition (status="select-hinter", round=N+1)
+
+When tests listen for client state (`socket.on("room:sync", ...)`), they may receive
+either broadcast first - this causes intermittent failures.
+
+Symptom: `expected 1 to deeply equal 2` on round checks
+Fix: Verify server state (`rooms.get()`) rather than client state
+
+### Game Elimination Flow
+```
+1. Player eliminated in "eliminate" phase
+2. Server broadcasts state (status="eliminate")
+3. Server adds round to roundHistory
+4. Check: isAllRedFishEliminated? isGameEnding?
+5. If round ending:
+   - Reassign roles (new master, new blue from survivors)
+   - Broadcast new state (status="select-hinter", round++)
+```
+
 ### Test Database
 - PostgreSQL via Docker (port 5433)
 - Config: `docker-compose.test.yml`

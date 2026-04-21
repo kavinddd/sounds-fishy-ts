@@ -356,7 +356,6 @@ const attachIoServerEventListeners = (io: IoServer) => {
       }
 
       if (room.game.hints.some((h) => h.hinter === socketId)) {
-        logger.info("This socket is already hintHistory");
         return ack(ackErr("ALREADY"));
       }
 
@@ -504,6 +503,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
         game: {
           ...room.game,
           currentScore: calcScore(room.players, room.game.roundHistory),
+          hints: [],
+          status: "select-hinter",
         },
       };
 
@@ -544,9 +545,11 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackOk());
       }
 
-      if (isRoundEnding) {
+if (isRoundEnding) {
+        logger.info(`Round transition STARTING. Current hints: ${JSON.stringify(newState.game.hints)}`);
+        
         // go next round - reassign roles with previous masters excluded
-        // Note: current round already added to roundHistory above for game-ending check
+        // Note: current round already added to roundHistory for game-ending check
         logger.info(`Going to next round. current round: ${newState.game.round}, eliminated: ${JSON.stringify([...newState.game.eliminated])}`);
         const masters = new Set<SocketId>(
           newState.game.roundHistory.map((round) => round.master),
@@ -574,6 +577,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
             hints: [],
           },
         };
+        logger.info(`Round transition: clearing hints. nextRoundState hints length: ${nextRoundState.game.hints.length}`);
         logger.info(`nextRoundState round: ${nextRoundState.game.round}, roles: ${JSON.stringify(roles)}`);
         await rooms.set(room.id, nextRoundState);
         const verify = await rooms.get(room.id);
