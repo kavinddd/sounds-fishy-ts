@@ -58,7 +58,9 @@ export type Round = {
   eliminated: Set<SocketId>;
 };
 
-export type ClientGameState = BaseGameState &
+export type ClientGameState = Omit<BaseGameState, "eliminated"> &
+  { eliminated: SocketId[] } & // Client receives Array, not Set
+  { roles: Record<SocketId, Role> } & // Client needs roles of all players
   (
     | { role: "master" }
     | { role: "red"; answer: string }

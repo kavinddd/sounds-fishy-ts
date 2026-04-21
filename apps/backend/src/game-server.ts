@@ -502,6 +502,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         ...room,
         game: {
           ...room.game,
+          eliminated: eliminatedSocketIds,
           currentScore: calcScore(room.players, room.game.roundHistory),
           hints: [],
           status: "select-hinter",
@@ -581,6 +582,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
             round: newState.game.round + 1,
             eliminated: new Set(),
             status: "select-hinter",
+            hints: [],
+            eliminated: new Set(),
           },
         };
         logger.info(
@@ -666,14 +669,16 @@ const makeGameClientState = (
   game: ServerGameState,
   // players: SocketId[],
 ): ClientGameState => {
-  const { question, answer, roundHistory: _, ...state } = game;
+  const { question, answer, roundHistory: _, eliminated, roles, ...rest } = game;
 
   switch (role) {
     case "master": {
       return {
         question,
         role,
-        ...state,
+        roles,
+        eliminated: [...eliminated],
+        ...rest,
       };
     }
     case "red": {
@@ -681,7 +686,9 @@ const makeGameClientState = (
         question,
         answer,
         role,
-        ...state,
+        roles,
+        eliminated: [...eliminated],
+        ...rest,
       };
     }
     case "blue": {
@@ -689,7 +696,9 @@ const makeGameClientState = (
         question,
         answer,
         role,
-        ...state,
+        roles,
+        eliminated: [...eliminated],
+        ...rest,
       };
     }
   }

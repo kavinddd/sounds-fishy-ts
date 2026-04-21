@@ -1,6 +1,13 @@
 import { createContext, useEffect, useState, type ReactNode } from "react";
 import { io } from "socket.io-client";
-import type { ClientSocket, ClientState, RoomId, Chat } from "@sounds-fishy/shared";
+import type {
+  ClientSocket,
+  ClientGameState,
+  ClientState,
+  RoomId,
+  Chat,
+  SocketId,
+} from "@sounds-fishy/shared";
 
 type SocketStatus = "idle" | "connecting" | "in-room" | "in-game" | "error";
 
@@ -13,11 +20,15 @@ interface SocketContextValue {
   chats: Chat[];
   error: string | null;
   isHost: boolean;
+  gameState: ClientGameState | null;
   hostRoom: () => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
   leaveRoom: () => Promise<void>;
   sendChat: (message: string) => Promise<void>;
   startGame: () => Promise<void>;
+  selectHinter: (socketId: string) => Promise<void>;
+  giveHint: (hint: string) => Promise<void>;
+  eliminate: (socketId: string) => Promise<void>;
 }
 
 export const SocketContext = createContext<SocketContextValue | null>(null);
@@ -32,6 +43,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [roomState, setRoomState] = useState<ClientState | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const gameState = roomState?.isPlaying
+    ? (roomState as ClientState & { isPlaying: true }).game
+    : null;
 
   useEffect(() => {
     const newSocket: ClientSocket = io(SOCKET_URL, {
@@ -143,9 +158,39 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     if (!socket || !roomId) return;
 
     const ack = await socket.emitWithAck("game:start");
-    
+
     if (!ack.success) {
       setError(getErrorMessage(ack.code, "start"));
+    }
+  };
+
+  const selectHinter = async (socketId: string) => {
+    if (!socket || !roomId) return;
+
+    const ack = await socket.emitWithAck("game:select-hinter", socketId as SocketId);
+
+    if (!ack.success) {
+      setError(getErrorMessage(ack.code, "select-hinter"));
+    }
+  };
+
+  const giveHint = async (hint: string) => {
+    if (!socket || !roomId) return;
+
+    const ack = await socket.emitWithAck("game:hint", hint);
+
+    if (!ack.success) {
+      setError(getErrorMessage(ack.code, "hint"));
+    }
+  };
+
+  const eliminate = async (socketId: string) => {
+    if (!socket || !roomId) return;
+
+    const ack = await socket.emitWithAck("game:eliminate", socketId as SocketId);
+
+    if (!ack.success) {
+      setError(getErrorMessage(ack.code, "eliminate"));
     }
   };
 
@@ -162,11 +207,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         chats,
         error,
         isHost,
+        gameState,
         hostRoom,
         joinRoom,
         leaveRoom,
         sendChat,
         startGame,
+        selectHinter,
+        giveHint,
+        eliminate,
       }}
     >
       {children}
@@ -193,10 +242,28 @@ function getErrorMessage(code: string, action: string): string {
     start: {
       NO_ROOM: "You are not in a room",
       NOT_HOST: "Only the host can start the game",
+      NOT_ENOUGH: "Need at least 3 players",
       IN_GAME: "Game is already in progress",
       UNEXPECTED: "Failed to start game",
     },
+    "select-hinter": {
+      NOT_MASTER: "Only the master can select a hinter",
+      NOT_YOUR_TURN: "Not your turn",
+      ALREADY: "This player already gave a hint",
+      UNEXPECTED: "Failed to select hinter",
+    },
+    hint: {
+      NOT_HINTER: "You are not the current hinter",
+      NOT_YOUR_TURN: "Not your turn",
+      ANSWER: "Invalid hint",
+      UNEXPECTED: "Failed to give hint",
+    },
+    eliminate: {
+      NOT_MASTER: "Only the master can eliminate",
+      NOT_YOUR_TURN: "Not your turn",
+      UNEXPECTED: "Failed to eliminate",
+    },
   };
-  
+
   return messages[action]?.[code] ?? `Failed to ${action}`;
 }
