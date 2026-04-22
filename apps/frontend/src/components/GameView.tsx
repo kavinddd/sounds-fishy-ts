@@ -37,6 +37,8 @@ function getRoleIcon(role: Role): string {
       return "🐟";
     case "blue":
       return "🐠";
+    default:
+      return "❓";
   }
 }
 

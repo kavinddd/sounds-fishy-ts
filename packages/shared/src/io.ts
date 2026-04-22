@@ -65,6 +65,7 @@ export type ClientGameState = Omit<BaseGameState, "eliminated"> &
     | { role: "master" }
     | { role: "red"; answer: string }
     | { role: "blue"; answer: string }
+    | { role: undefined }
   );
 
 export type Role = ClientGameState["role"];

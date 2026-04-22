@@ -669,7 +669,14 @@ const makeGameClientState = (
   game: ServerGameState,
   // players: SocketId[],
 ): ClientGameState => {
-  const { question, answer, roundHistory: _, eliminated, roles, ...rest } = game;
+  const {
+    question,
+    answer,
+    roundHistory: _,
+    eliminated,
+    roles,
+    ...rest
+  } = game;
 
   switch (role) {
     case "master": {
@@ -696,6 +703,15 @@ const makeGameClientState = (
         question,
         answer,
         role,
+        roles,
+        eliminated: [...eliminated],
+        ...rest,
+      };
+    }
+    default: {
+      return {
+        question,
+        role: undefined,
         roles,
         eliminated: [...eliminated],
         ...rest,
