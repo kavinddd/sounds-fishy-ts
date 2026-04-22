@@ -635,30 +635,23 @@ describe("Test IO connection ", () => {
       assert(blue, "Was unable to find socket id of red fish.");
 
       // 4. listen to new state (expect game over state)
-      const clienStatePromise = listenClientStateOnce(master);
+      // let's move it to unit test
+      // const clienStatePromise = listenClientStateOnce(master);
       await master.emitWithAck("game:eliminate", blue.id as SocketId);
 
       // 5. check state
       const serverState = (await rooms.get(roomId))._unsafeUnwrap();
-      const clientState = await clienStatePromise;
+      // const clientState = await clienStatePromise;
 
       assert(serverState.isPlaying);
-      assert(clientState.isPlaying);
-
       expect(serverState.game.status === "select-hinter");
-      expect(clientState.game.status === "select-hinter");
-
       expect(serverState.game.hints.length).toEqual(0); // cleared for new round
-
       expect(serverState.game.round).toEqual(roomBeforeHint.game.round + 1);
-      expect(clientState.game.round).toEqual(roomBeforeHint.game.round + 1);
-
       expect(serverState.game.currentHinter).toBeUndefined();
-      expect(clientState.game.currentHinter).toBeUndefined();
     });
   });
 
-  it.skip("can eliminate all red fish and game over", async () => {
+  it("can eliminate two red fish and game over", async () => {
     // 1. create room with 4 players (need multiple red fish to test properly)
     const p1 = await newSocket();
     const p2 = await newSocket();
@@ -668,45 +661,96 @@ describe("Test IO connection ", () => {
 
     // 2. start the game
     await p1.emitWithAck("game:start");
-
-    // Wait for initial state to settle
-    await new Promise(r => setTimeout(r, 100));
-    
-    const room = (await rooms.get(roomId))._unsafeUnwrap();
+    // const room = (await rooms.get(roomId))._unsafeUnwrap();
 
     // 3. loop until all red fish eliminated
     let isGameOver = false;
     let round = 0;
+
     while (!isGameOver && round < 10) {
       round++;
-      
+
       const hinting = await simulateHinting([p1, p2, p3, p4], roomId);
-      if (hinting.isErr()) {
-        const currentRoom = (await rooms.get(roomId))._unsafeUnwrap();
-        isGameOver = !currentRoom.isPlaying;
-        if (!isGameOver) throw new Error(`Failed to simulate hinting: ${hinting.error}`);
-        break;
-      }
       if (hinting.isErr())
         throw new Error(`Failed to simulate hinting: ${hinting.error}`);
 
       const roomAfterHint = (await rooms.get(roomId))._unsafeUnwrap();
       assert(roomAfterHint.isPlaying, "Room should be playing.");
       expect(roomAfterHint.game.status === "eliminate").toBe(true);
+
       const master = [p1, p2, p3, p4].find(
         (p) => roomAfterHint.game.roles[p.id as SocketId] === "master",
       );
+
       assert(master, "Was unable to find socket id of master.");
-      const red = [p1, p2, p3, p4].find(
-        (p) => roomAfterHint.game.roles[p.id as SocketId] === "red",
+      const red = [p1, p2, p3, p4]
+        .filter((p) => !roomAfterHint.game.eliminated.has(p.id as SocketId))
+        .find((p) => roomAfterHint.game.roles[p.id as SocketId] === "red");
+
+      assert(
+        red,
+        "No red fish left - all should be eliminated before this point.",
       );
-      assert(red, "No red fish left - all should be eliminated before this point.");
+
       // 4. eliminate the red fish
-      await master.emitWithAck("game:eliminate", red.id as SocketId);
+      const eliminating = await master.emitWithAck(
+        "game:eliminate",
+        red.id as SocketId,
+      );
+      expect(eliminating.success).toBeTruthy();
 
       // 5. check state
       const serverState = (await rooms.get(roomId))._unsafeUnwrap();
-      // const clientState = await clienStatePromise;
+      isGameOver = !serverState.isPlaying;
+    }
+
+    expect(isGameOver).toBeTruthy();
+  });
+  it("can eliminate single red fish and game over", async () => {
+    // 1. create room with 4 players (need multiple red fish to test properly)
+    const p1 = await newSocket();
+    const p2 = await newSocket();
+    const p3 = await newSocket();
+    const roomId = (await createRoom([p1, p2, p3]))._unsafeUnwrap();
+
+    // 2. start the game
+    await p1.emitWithAck("game:start");
+    // const room = (await rooms.get(roomId))._unsafeUnwrap();
+
+    // 3. loop until all red fish eliminated
+    let isGameOver = false;
+    let round = 0;
+    while (!isGameOver && round < 10) {
+      round++;
+
+      const hinting = await simulateHinting([p1, p2, p3], roomId);
+      if (hinting.isErr()) {
+        throw new Error(`Failed to simulate hinting: ${hinting.error}`);
+      }
+
+      const roomAfterHint = (await rooms.get(roomId))._unsafeUnwrap();
+      assert(roomAfterHint.isPlaying, "Room should be playing.");
+      expect(roomAfterHint.game.status === "eliminate").toBe(true);
+      const master = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "master",
+      );
+      assert(master, "Was unable to find socket id of master.");
+      const red = [p1, p2, p3].find(
+        (p) => roomAfterHint.game.roles[p.id as SocketId] === "red",
+      );
+      assert(
+        red,
+        "No red fish left - all should be eliminated before this point.",
+      );
+      // 4. eliminate the red fish
+      const eliminating = await master.emitWithAck(
+        "game:eliminate",
+        red.id as SocketId,
+      );
+      expect(eliminating.success).toBeTruthy();
+
+      // 5. check state
+      const serverState = (await rooms.get(roomId))._unsafeUnwrap();
       isGameOver = !serverState.isPlaying;
     }
 

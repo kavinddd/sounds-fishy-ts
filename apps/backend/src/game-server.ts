@@ -511,12 +511,13 @@ const attachIoServerEventListeners = (io: IoServer) => {
       await rooms.set(room.id, newState);
 
       // Add current round to history for game-ending check
-      const eliminatedSet = room.game.eliminated;
       const currentRoundEntry = {
         round: room.game.round,
-        eliminated: eliminatedSet,
+        eliminated: room.game.eliminated,
         roles: room.game.roles,
-        blueFish: Object.entries(room.game.roles).find(([_, r]) => r === "blue")?.[0] as SocketId,
+        blueFish: Object.entries(room.game.roles).find(
+          ([_, r]) => r === "blue",
+        )?.[0] as SocketId,
         master: room.game.currentMaster,
         question: room.game.question,
         hints: room.game.hints,
@@ -545,24 +546,29 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackOk());
       }
 
-if (isRoundEnding) {
-        logger.info(`Round transition STARTING. Current hints: ${JSON.stringify(newState.game.hints)}`);
-        
+      if (isRoundEnding) {
+        logger.info(
+          `Round transition STARTING. Current hints: ${JSON.stringify(newState.game.hints)}`,
+        );
+
         // go next round - reassign roles with previous masters excluded
-        // Note: current round already added to roundHistory for game-ending check
-        logger.info(`Going to next round. current round: ${newState.game.round}, eliminated: ${JSON.stringify([...newState.game.eliminated])}`);
+        // NOTE: current round already added to roundHistory for game-ending check
+        logger.info(
+          `Going to next round. current round: ${newState.game.round}, eliminated: ${JSON.stringify([...newState.game.eliminated])}`,
+        );
         const masters = new Set<SocketId>(
           newState.game.roundHistory.map((round) => round.master),
         );
-        logger.info(`masters: ${JSON.stringify([...masters])}, activePlayers: ${JSON.stringify(newState.players.filter((p) => !newState.game.eliminated.has(p)))}`);
-        const roles = assignRolesToPlayers(
-          newState.players.filter((p) => !newState.game.eliminated.has(p)),
-          masters,
+        logger.info(
+          `masters: ${JSON.stringify([...masters])}, activePlayers: ${JSON.stringify(newState.players.filter((p) => !newState.game.eliminated.has(p)))}`,
         );
+        const roles = assignRolesToPlayers(newState.players, masters);
         const master = Object.entries(roles).find(
           ([_, role]) => role === "master",
         )?.[0] as SocketId;
-        const [question, answer] = randomProblem(newState.game.questionHistory as Set<string>);
+        const [question, answer] = randomProblem(
+          newState.game.questionHistory as Set<string>,
+        );
 
         const nextRoundState: ServerState = {
           ...newState,
@@ -573,12 +579,16 @@ if (isRoundEnding) {
             answer,
             currentMaster: master,
             round: newState.game.round + 1,
+            eliminated: new Set(),
             status: "select-hinter",
-            hints: [],
           },
         };
-        logger.info(`Round transition: clearing hints. nextRoundState hints length: ${nextRoundState.game.hints.length}`);
-        logger.info(`nextRoundState round: ${nextRoundState.game.round}, roles: ${JSON.stringify(roles)}`);
+        logger.info(
+          `Round transition: clearing hints. nextRoundState hints length: ${nextRoundState.game.hints.length}`,
+        );
+        logger.info(
+          `nextRoundState round: ${nextRoundState.game.round}, roles: ${JSON.stringify(roles)}`,
+        );
         await rooms.set(room.id, nextRoundState);
         const verify = await rooms.get(room.id);
         if (verify.isOk() && verify.value.isPlaying) {
