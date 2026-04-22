@@ -690,6 +690,7 @@ const calcScore = (
   rounds: Round[],
 ): Record<SocketId, number> => {
   const result: Record<SocketId, number> = {};
+  players.forEach((pId) => (result[pId] = 0));
 
   rounds.forEach((round) => {
     const isMasterWin = !round.eliminated.has(round.blueFish);
