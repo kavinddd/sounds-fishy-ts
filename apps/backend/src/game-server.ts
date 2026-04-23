@@ -214,7 +214,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
       const state = stateResult.value;
 
       if (state.status === "idle") {
-        logger.info("Failed to chat, the socket is idling");
+        logger.info("Failed to chat, the socket is idling.");
         return ack(ackErr("NO_ROOM"));
       }
 
@@ -231,32 +231,38 @@ const attachIoServerEventListeners = (io: IoServer) => {
       const stateResult = await sockets.get(socket.data.id);
 
       if (stateResult.isErr()) {
+        logger.info("Failed to start game, cannot get socket state.");
         return ack(ackErr("UNEXPECTED"));
       }
 
       const state = stateResult.value;
 
       if (state.status !== "in-room") {
+        logger.info("Failed to start game, the state is not in room.");
         return ack(ackErr("NO_ROOM"));
       }
 
       const roomResult = await rooms.get(state.roomId);
 
       if (roomResult.isErr()) {
+        logger.info("Failed to start game, failed to get room state.");
         return ack(ackErr("UNEXPECTED"));
       }
 
       const room = roomResult.value;
 
       if (room.isPlaying) {
+        logger.info("Failed to start game, room is already playing.");
         return ack(ackErr("IN_GAME"));
       }
 
       if (room.hostId !== socket.data.id) {
+        logger.info("Failed to start game, you are not the host.");
         return ack(ackErr("NOT_HOST"));
       }
 
       if (room.players.length < 3) {
+        logger.info("Failed to start game, minimum player is 3 people.");
         return ack(ackErr("NOT_ENOUGH"));
       }
 
@@ -271,6 +277,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
       )?.[0] as SocketId;
 
       if (!master || !blueFish) {
+        logger.info(
+          "Failed to start game, unable to find master or blue fish role while assigning.",
+        );
         return ack(ackErr("UNEXPECTED"));
       }
       const [question, answer] = randomProblem();
@@ -535,9 +544,10 @@ const attachIoServerEventListeners = (io: IoServer) => {
       const isGameEnding =
         isRoundEnding &&
         activePlayers.length > 0 &&
-        activePlayers.every((p) => masters.has(p));
+        newState.players.every((p) => masters.has(p));
 
       if (isGameEnding) {
+        logger.info("The game is ending.");
         const endGameState: ServerState = {
           ...newState,
           isPlaying: false,
