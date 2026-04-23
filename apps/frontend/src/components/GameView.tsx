@@ -90,8 +90,7 @@ export function GameView() {
     return (gameState as { answer?: string }).answer ?? null;
   }, [gameState]);
 
-  const isMyTurn =
-    gameState?.status === "select-hinter" && myRole === "master";
+  const isMyTurn = gameState?.status === "select-hinter" && myRole === "master";
 
   const isMyHintTurn =
     gameState?.status === "hint" && gameState.currentHinter === playerId;
@@ -158,9 +157,7 @@ export function GameView() {
       <aside className="hidden lg:flex lg:flex-col w-72 bg-surface/50 border-r border-border">
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="font-display text-xl font-bold text-accent">
-              Game
-            </h1>
+            <h1 className="font-display text-xl font-bold text-accent">Game</h1>
             <Button
               onClick={leaveRoom}
               variant="outline"
@@ -207,9 +204,7 @@ export function GameView() {
           </div>
 
           <div className="mb-4">
-            <p className="text-xs text-text-light mb-2">
-              Scores
-            </p>
+            <p className="text-xs text-text-light mb-2">Scores</p>
             <div className="space-y-2">
               {players.map((player) => {
                 const score = gameState?.currentScore?.[player] ?? 0;
@@ -225,17 +220,27 @@ export function GameView() {
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      {role && <span className="text-sm">{getRoleIcon(role)}</span>}
+                      {role && (
+                        <span className="text-sm">{getRoleIcon(role)}</span>
+                      )}
                       <span
                         className={`text-sm ${
-                          isEliminated ? "line-through text-text-light" : "text-text"
+                          isEliminated
+                            ? "line-through text-text-light"
+                            : "text-text"
                         }`}
                       >
-                        {player === playerId ? "You" : `P${players.indexOf(player) + 1}`}
+                        {player === playerId
+                          ? "You"
+                          : `P${players.indexOf(player) + 1}`}
                       </span>
-                      {player === gameState?.currentMaster && <span className="text-yellow-500">👑</span>}
+                      {player === gameState?.currentMaster && (
+                        <span className="text-yellow-500">👑</span>
+                      )}
                     </div>
-                    <span className={`font-bold ${score > 0 ? "text-green-500" : "text-text"}`}>
+                    <span
+                      className={`font-bold ${score > 0 ? "text-green-500" : "text-text"}`}
+                    >
                       {score}
                     </span>
                   </div>
@@ -545,8 +550,20 @@ export function GameView() {
                 onClick={handleOpenChat}
                 className="flex items-center gap-1 text-sm font-medium relative"
               >
-                <span className={unreadChatCount > 0 ? "text-red-500" : "text-primary"}>💬</span>
-                <span className={unreadChatCount > 0 ? "text-red-500" : "text-primary"}>Chat</span>
+                <span
+                  className={
+                    unreadChatCount > 0 ? "text-red-500" : "text-primary"
+                  }
+                >
+                  💬
+                </span>
+                <span
+                  className={
+                    unreadChatCount > 0 ? "text-red-500" : "text-primary"
+                  }
+                >
+                  Chat
+                </span>
                 {unreadChatCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
                     {unreadChatCount > 9 ? "9+" : unreadChatCount}
@@ -563,9 +580,7 @@ export function GameView() {
             </div>
           </div>
           {myRole && (myRole === "red" || myRole === "blue") && (
-            <p className="text-xs text-text-light">
-              {getHintInstructions()}
-            </p>
+            <p className="text-xs text-text-light">{getHintInstructions()}</p>
           )}
         </div>
 
@@ -596,17 +611,27 @@ export function GameView() {
                     <div
                       key={player}
                       className={`flex items-center justify-between px-4 py-3 rounded-lg ${
-                        isEliminated ? "bg-red-500/20 opacity-50" : "bg-background"
+                        isEliminated
+                          ? "bg-red-500/20 opacity-50"
+                          : "bg-background"
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         {role && <span>{getRoleIcon(role)}</span>}
-                        <span className={isEliminated ? "line-through text-text-light" : "text-text"}>
+                        <span
+                          className={
+                            isEliminated
+                              ? "line-through text-text-light"
+                              : "text-text"
+                          }
+                        >
                           {player === playerId ? "You" : `P${index + 1}`}
                         </span>
                         {player === gameState?.currentMaster && <span>👑</span>}
                       </div>
-                      <span className={`font-bold ${score > 0 ? "text-green-500" : "text-text"}`}>
+                      <span
+                        className={`font-bold ${score > 0 ? "text-green-500" : "text-text"}`}
+                      >
                         {score}
                       </span>
                     </div>
