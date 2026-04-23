@@ -514,7 +514,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
           eliminated: eliminatedSocketIds,
           currentScore: calcScore(room.players, room.game.roundHistory),
           hints: [],
-          status: "select-hinter",
+          status: "eliminate",
         },
       };
 
@@ -545,6 +545,10 @@ const attachIoServerEventListeners = (io: IoServer) => {
         isRoundEnding &&
         activePlayers.length > 0 &&
         newState.players.every((p) => masters.has(p));
+
+      logger.info(
+        `isRoundEnding: ${isRoundEnding}, isGameEndings: ${isGameEnding}`,
+      );
 
       if (isGameEnding) {
         logger.info("The game is ending.");
@@ -593,7 +597,6 @@ const attachIoServerEventListeners = (io: IoServer) => {
             eliminated: new Set(),
             status: "select-hinter",
             hints: [],
-            eliminated: new Set(),
           },
         };
         logger.info(

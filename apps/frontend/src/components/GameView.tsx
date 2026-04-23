@@ -79,6 +79,7 @@ export function GameView() {
   const players = roomState?.players ?? [];
   const eliminated = gameState?.eliminated ?? [];
   const activePlayers = players.filter((p) => !eliminated.includes(p));
+  const isEliminated = eliminated.includes(playerId);
 
   const myRole = useMemo(() => {
     if (!gameState || !playerId) return null;
@@ -343,7 +344,21 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "select-hinter" && isMyTurn && (
+            {isEliminated && (
+              <div className="text-center py-8">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <span className="text-4xl">😢</span>
+                </div>
+                <p className="text-xl font-bold text-red-500 mb-2">
+                  You have been eliminated!
+                </p>
+                <p className="text-text-light">
+                  Watch the game and cheer on the survivors.
+                </p>
+              </div>
+            )}
+
+            {gameState?.status === "select-hinter" && isMyTurn && !isEliminated && (
               <div className="space-y-3">
                 <p className="text-sm text-text-light text-center">
                   Choose who should give a hint
@@ -383,7 +398,7 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "select-hinter" && !isMyTurn && (
+            {gameState?.status === "select-hinter" && !isMyTurn && !isEliminated && (
               <div className="text-center py-8">
                 <div className="animate-pulse">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/20 flex items-center justify-center">
@@ -408,7 +423,7 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "hint" && isMyHintTurn && (
+            {gameState?.status === "hint" && isMyHintTurn && !isEliminated && (
               <div className="space-y-4">
                 <p className="text-sm text-text-light text-center">
                   {getHintInstructions()}
@@ -436,7 +451,7 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "hint" && !isMyHintTurn && (
+            {gameState?.status === "hint" && !isMyHintTurn && !isEliminated && (
               <div className="text-center py-8">
                 <div className="animate-pulse">
                   <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/20 flex items-center justify-center">
@@ -463,7 +478,7 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "eliminate" && isMyEliminateTurn && (
+            {gameState?.status === "eliminate" && isMyEliminateTurn && !isEliminated && (
               <div className="space-y-3">
                 <p className="text-sm text-text-light text-center">
                   Who is the impostor?
@@ -480,7 +495,21 @@ export function GameView() {
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
                             {player.slice(0, 2).toUpperCase()}
-                          </div>
+</div>
+
+        {isEliminated && (
+          <div className="lg:hidden fixed bottom-20 left-4 right-4 bg-red-500/90 backdrop-blur-sm rounded-xl p-4 shadow-lg z-40">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <span className="text-xl">😢</span>
+              </div>
+              <div>
+                <p className="text-white font-semibold">You have been eliminated!</p>
+                <p className="text-white/80 text-sm">Watch the game continue...</p>
+              </div>
+            </div>
+          </div>
+        )}
                           <span className="text-text font-medium">
                             Player {player.slice(0, 4)}
                           </span>
