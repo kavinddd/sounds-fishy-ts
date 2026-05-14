@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
 import { Bubbles } from "./Bubbles";
@@ -59,21 +59,21 @@ export function GameView() {
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastReadCount = useRef(0);
 
   const handleOpenChat = () => {
+    lastReadCount.current = chats.length;
     setShowChat(true);
-    setUnreadChatCount(0);
   };
 
   const handleCloseChat = () => {
+    lastReadCount.current = chats.length;
     setShowChat(false);
   };
 
-  useEffect(() => {
-    if (!showChat && chats.length > 0) {
-      setUnreadChatCount((prev) => prev + 1);
-    }
+  const unreadChatCount = useMemo(() => {
+    if (showChat) return 0;
+    return Math.max(0, chats.length - lastReadCount.current);
   }, [chats.length, showChat]);
 
   const players = roomState?.players ?? [];
