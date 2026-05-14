@@ -418,19 +418,20 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("NOT_HINTER"));
       }
 
-      const isHintAnAnswer =
-        room.game.answer.toLowerCase() === hint.trim().toLowerCase();
+      const normalizedHint = hint.trim().toLowerCase();
+      const normalizedAnswer = room.game.answer.toLowerCase();
+      const hintContainsAnswer = normalizedHint.includes(normalizedAnswer);
 
       switch (role) {
         case "master":
           logger.info("Failed to hint, you are master.");
           return ack(ackErr("UNEXPECTED"));
         case "red":
-          if (isHintAnAnswer) return ack(ackErr("ANSWER"));
+          if (hintContainsAnswer) return ack(ackErr("ANSWER_CONTAINS"));
           break;
 
         case "blue":
-          if (!isHintAnAnswer) return ack(ackErr("ANSWER"));
+          if (!hintContainsAnswer) return ack(ackErr("ANSWER_REQUIRED"));
           break;
       }
 

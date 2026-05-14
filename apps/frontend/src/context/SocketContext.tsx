@@ -255,7 +255,8 @@ function getErrorMessage(code: string, action: string): string {
     hint: {
       NOT_HINTER: "You are not the current hinter",
       NOT_YOUR_TURN: "Not your turn",
-      ANSWER: "Invalid hint",
+      ANSWER_CONTAINS: "Your hint cannot contain the answer",
+      ANSWER_REQUIRED: "Your hint must include the answer",
       UNEXPECTED: "Failed to give hint",
     },
     eliminate: {
