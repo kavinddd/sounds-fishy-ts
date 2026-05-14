@@ -3,6 +3,7 @@ import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
 import { Bubbles } from "./Bubbles";
 import { ChatPanel } from "./ChatPanel";
+import { GameRulesDialog } from "./GameRulesDialog";
 import type { Role, HintHistory } from "@sounds-fishy/shared";
 
 const DEV_MODE = import.meta.env.DEV;
@@ -59,6 +60,7 @@ export function GameView() {
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const lastReadCount = useRef(0);
 
   const handleOpenChat = () => {
@@ -606,6 +608,13 @@ export function GameView() {
                 <span>🏆</span>
                 <span>Scores</span>
               </button>
+              <button
+                onClick={() => setShowRules(true)}
+                className="flex items-center gap-1 text-sm text-primary font-medium"
+              >
+                <span>📖</span>
+                <span>Rules</span>
+              </button>
             </div>
           </div>
           {myRole && (myRole === "red" || myRole === "blue") && (
@@ -704,6 +713,8 @@ export function GameView() {
             </div>
           </div>
         )}
+
+        <GameRulesDialog isOpen={showRules} onClose={() => setShowRules(false)} />
       </main>
     </div>
   );

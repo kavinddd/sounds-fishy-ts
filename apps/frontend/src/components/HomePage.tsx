@@ -3,10 +3,12 @@ import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
 import { Input, Card } from "./Input";
 import { Bubbles } from "./Bubbles";
+import { GameRulesDialog } from "./GameRulesDialog";
 
 export function HomePage() {
   const { hostRoom, joinRoom, status, error } = useSocket();
   const [joinRoomId, setJoinRoomId] = useState("");
+  const [showRules, setShowRules] = useState(false);
 
   const handleHost = async () => {
     await hostRoom();
@@ -68,7 +70,16 @@ export function HomePage() {
             </Button>
           </div>
         </Card>
+
+        <button
+          onClick={() => setShowRules(true)}
+          className="text-text-light text-sm hover:text-text underline"
+        >
+          How to Play
+        </button>
       </div>
+
+      <GameRulesDialog isOpen={showRules} onClose={() => setShowRules(false)} />
     </div>
   );
 }
