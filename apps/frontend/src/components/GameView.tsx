@@ -734,6 +734,14 @@ export function GameView() {
         )}
 
         <GameRulesDialog isOpen={showRules} onClose={() => setShowRules(false)} />
+
+        <button
+          onClick={() => setShowRules(true)}
+          className="hidden lg:flex fixed bottom-6 right-6 items-center gap-2 px-4 py-2 bg-surface/90 backdrop-blur-sm rounded-xl shadow-lg border border-border text-sm font-medium text-text hover:bg-surface transition-colors"
+        >
+          <span>📖</span>
+          <span>Rules</span>
+        </button>
       </main>
     </div>
   );
