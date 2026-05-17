@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useSocket } from "../hooks/useSocket";
 import { Button } from "./Button";
 import { Bubbles } from "./Bubbles";
@@ -97,6 +97,12 @@ export function GameView() {
 
   const isMyHintTurn =
     gameState?.status === "hint" && gameState.currentHinter === playerId;
+
+  useEffect(() => {
+    if (isMyHintTurn && myRole === "blue" && answer) {
+      setHintInput(answer);
+    }
+  }, [isMyHintTurn, myRole, answer]);
 
   const isMyEliminateTurn =
     gameState?.status === "eliminate" && myRole === "master";
@@ -429,46 +435,28 @@ export function GameView() {
               <div className="space-y-4">
                 <p className="text-sm text-text-light text-center">
                   {getHintInstructions()}
+                  {myRole === "blue" && " - answer is pre-filled"}
                 </p>
-                {myRole === "blue" ? (
-                  <>
-                    <div className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm text-center">
-                      Your answer is pre-filled - click Submit to confirm
-                    </div>
-                    <input
-                      type="text"
-                      value={answer ?? ""}
-                      readOnly
-                      className="w-full px-4 py-3 rounded-xl border-2 border-blue-300 bg-blue-50 text-text text-base"
-                    />
-                    <Button onClick={handleGiveHint} className="w-full">
-                      Submit Hint
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      value={hintInput}
-                      onChange={(e) => setHintInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && hintInput.trim()) {
-                          handleGiveHint();
-                        }
-                      }}
-                      placeholder="Type your hint..."
-                      className="w-full px-4 py-3 rounded-xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors text-base"
-                      autoFocus
-                    />
-                    <Button
-                      onClick={handleGiveHint}
-                      disabled={!hintInput.trim()}
-                      className="w-full"
-                    >
-                      Submit Hint
-                    </Button>
-                  </>
-                )}
+                <input
+                  type="text"
+                  value={hintInput}
+                  onChange={(e) => setHintInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && hintInput.trim()) {
+                      handleGiveHint();
+                    }
+                  }}
+                  placeholder={myRole === "blue" ? "Answer is pre-filled" : "Type your hint..."}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors text-base"
+                  autoFocus
+                />
+                <Button
+                  onClick={handleGiveHint}
+                  disabled={!hintInput.trim()}
+                  className="w-full"
+                >
+                  Submit Hint
+                </Button>
               </div>
             )}
 
