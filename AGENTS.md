@@ -205,3 +205,8 @@ See `packages/shared/src/io.ts` for type definitions.
 3. Use shared package for types used in both apps
 4. Keep components small and focused
 5. Always test with 3+ players for game flow verification
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
