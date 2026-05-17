@@ -366,29 +366,56 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "select-hinter" && isMyTurn && !isEliminated && (
-              <div className="space-y-3">
-                <p className="text-sm text-text-light text-center">
-                  Choose who should give a hint
-                </p>
-                <div className="space-y-2">
-                  {availableHinters.map((player) => (
-                    <button
-                      key={player}
-                      onClick={() => handleSelectHinter(player)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-background rounded-xl hover:bg-primary/10 transition-colors border border-border hover:border-primary"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
-                          {player.slice(0, 2).toUpperCase()}
+            {gameState?.status === "select-hinter" &&
+              isMyTurn &&
+              !isEliminated && (
+                <div className="space-y-3">
+                  <p className="text-sm text-text-light text-center">
+                    Choose who should give a hint
+                  </p>
+                  <div className="space-y-2">
+                    {availableHinters.map((player) => (
+                      <button
+                        key={player}
+                        onClick={() => handleSelectHinter(player)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-background rounded-xl hover:bg-primary/10 transition-colors border border-border hover:border-primary"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                            {player.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-text font-medium">
+                            Player {player.slice(0, 4)}
+                            {player === playerId && " (you)"}
+                          </span>
                         </div>
-                        <span className="text-text font-medium">
-                          Player {player.slice(0, 4)}
-                          {player === playerId && " (you)"}
-                        </span>
-                      </div>
+                        <svg
+                          className="w-5 h-5 text-text-light"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {gameState?.status === "select-hinter" &&
+              !isMyTurn &&
+              !isEliminated && (
+                <div className="text-center py-8">
+                  <div className="animate-pulse">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/20 flex items-center justify-center">
                       <svg
-                        className="w-5 h-5 text-text-light"
+                        className="w-8 h-8 text-primary"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -397,39 +424,16 @@ export function GameView() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M9 5l7 7-7 7"
+                          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
                         />
                       </svg>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {gameState?.status === "select-hinter" && !isMyTurn && !isEliminated && (
-              <div className="text-center py-8">
-                <div className="animate-pulse">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/20 flex items-center justify-center">
-                    <svg
-                      className="w-8 h-8 text-primary"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                      />
-                    </svg>
+                    </div>
+                    <p className="text-text font-medium">
+                      Waiting for the master to choose...
+                    </p>
                   </div>
-                  <p className="text-text font-medium">
-                    Waiting for the master to choose...
-                  </p>
                 </div>
-              </div>
-            )}
+              )}
 
             {gameState?.status === "hint" && isMyHintTurn && !isEliminated && (
               <div className="space-y-4">
@@ -446,7 +450,11 @@ export function GameView() {
                       handleGiveHint();
                     }
                   }}
-                  placeholder={myRole === "blue" ? "Answer is pre-filled" : "Type your hint..."}
+                  placeholder={
+                    myRole === "blue"
+                      ? "Answer is pre-filled"
+                      : "Type your hint..."
+                  }
                   className="w-full px-4 py-3 rounded-xl border-2 border-primary/30 bg-white text-text placeholder:text-text-light focus:outline-none focus:border-primary transition-colors text-base"
                   autoFocus
                 />
@@ -487,60 +495,66 @@ export function GameView() {
               </div>
             )}
 
-            {gameState?.status === "eliminate" && isMyEliminateTurn && !isEliminated && (
-              <div className="space-y-3">
-                <p className="text-sm text-text-light text-center">
-                  Who is the impostor?
-                </p>
-                <div className="space-y-2">
-                  {activePlayers
-                    .filter((p) => p !== playerId)
-                    .map((player) => (
-                      <button
-                        key={player}
-                        onClick={() => handleEliminate(player)}
-                        className="w-full flex items-center justify-between px-4 py-3 bg-background rounded-xl hover:bg-red-500/20 transition-colors border border-border hover:border-red-500"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
-                            {player.slice(0, 2).toUpperCase()}
-</div>
-
-        {isEliminated && (
-          <div className="lg:hidden fixed bottom-20 left-4 right-4 bg-red-500/90 backdrop-blur-sm rounded-xl p-4 shadow-lg z-40">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                <span className="text-xl">😢</span>
-              </div>
-              <div>
-                <p className="text-white font-semibold">You have been eliminated!</p>
-                <p className="text-white/80 text-sm">Watch the game continue...</p>
-              </div>
-            </div>
-          </div>
-        )}
-                          <span className="text-text font-medium">
-                            Player {player.slice(0, 4)}
-                          </span>
-                        </div>
-                        <svg
-                          className="w-5 h-5 text-red-500"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+            {gameState?.status === "eliminate" &&
+              isMyEliminateTurn &&
+              !isEliminated && (
+                <div className="space-y-3">
+                  <p className="text-sm text-text-light text-center">
+                    Who is the impostor?
+                  </p>
+                  <div className="space-y-2">
+                    {activePlayers
+                      .filter((p) => p !== playerId)
+                      .map((player) => (
+                        <button
+                          key={player}
+                          onClick={() => handleEliminate(player)}
+                          className="w-full flex items-center justify-between px-4 py-3 bg-background rounded-xl hover:bg-red-500/20 transition-colors border border-border hover:border-red-500"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    ))}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                              {player.slice(0, 2).toUpperCase()}
+                            </div>
+
+                            {isEliminated && (
+                              <div className="lg:hidden fixed bottom-20 left-4 right-4 bg-red-500/90 backdrop-blur-sm rounded-xl p-4 shadow-lg z-40">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                                    <span className="text-xl">😢</span>
+                                  </div>
+                                  <div>
+                                    <p className="text-white font-semibold">
+                                      You have been eliminated!
+                                    </p>
+                                    <p className="text-white/80 text-sm">
+                                      Watch the game continue...
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <span className="text-text font-medium">
+                              Player {player.slice(0, 4)}
+                            </span>
+                          </div>
+                          <svg
+                            className="w-5 h-5 text-red-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {gameState?.status === "eliminate" && !isMyEliminateTurn && (
               <div className="text-center py-8">
@@ -721,7 +735,10 @@ export function GameView() {
           </div>
         )}
 
-        <GameRulesDialog isOpen={showRules} onClose={() => setShowRules(false)} />
+        <GameRulesDialog
+          isOpen={showRules}
+          onClose={() => setShowRules(false)}
+        />
 
         <button
           onClick={() => setShowRules(true)}
