@@ -15,7 +15,7 @@ import {
   SocketId,
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
-import { okAsync, ResultAsync } from "neverthrow";
+import { err, ok, okAsync, ResultAsync } from "neverthrow";
 import { rooms, sockets } from "./store";
 import { randomInt } from "crypto";
 
@@ -426,12 +426,23 @@ const attachIoServerEventListeners = (io: IoServer) => {
         case "master":
           logger.info("Failed to hint, you are master.");
           return ack(ackErr("UNEXPECTED"));
+
         case "red":
-          if (hintContainsAnswer) return ack(ackErr("ANSWER_CONTAINS"));
+          if (hintContainsAnswer) {
+            logger.info(
+              `Red fish's hint was "${normalizedHint}" while the answer was "${normalizedAnswer}"`,
+            );
+            return ack(ackErr("ANSWER_CONTAINS"));
+          }
           break;
 
         case "blue":
-          if (!hintContainsAnswer) return ack(ackErr("ANSWER_REQUIRED"));
+          if (!hintContainsAnswer) {
+            logger.info(
+              `Blue fish's hint was "${normalizedHint}" while the answer was "${normalizedAnswer}"`,
+            );
+            return ack(ackErr("ANSWER_REQUIRED"));
+          }
           break;
       }
 
@@ -557,6 +568,17 @@ const attachIoServerEventListeners = (io: IoServer) => {
           ...newState,
           isPlaying: false,
         };
+
+        const broadcastEliminatedResult = broadcastEliminated(
+          room,
+          io,
+          socketId,
+        );
+
+        if (broadcastEliminatedResult.isErr()) {
+          logger.info("Failed to broadcast eliminated result.");
+          return ack(ackErr("UNEXPECTED"));
+        }
         await rooms.set(room.id, endGameState);
         await broadcastClientState(endGameState, io);
         return ack(ackOk());
@@ -575,6 +597,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         const masters = new Set<SocketId>(
           newState.game.roundHistory.map((round) => round.master),
         );
+
         logger.info(
           `masters: ${JSON.stringify([...masters])}, activePlayers: ${JSON.stringify(newState.players.filter((p) => !newState.game.eliminated.has(p)))}`,
         );
@@ -611,10 +634,27 @@ const attachIoServerEventListeners = (io: IoServer) => {
         if (verify.isOk() && verify.value.isPlaying) {
           logger.info(`Verified stored round: ${verify.value.game.round}`);
         }
+
+        const broadcastEliminatedResult = broadcastEliminated(
+          room,
+          io,
+          socketId,
+        );
+
+        if (broadcastEliminatedResult.isErr()) {
+          logger.info("Failed to broadcast eliminated result.");
+          return ack(ackErr("UNEXPECTED"));
+        }
         await broadcastClientState(nextRoundState, io);
         return ack(ackOk());
       }
 
+      const broadcastEliminatedResult = broadcastEliminated(room, io, socketId);
+
+      if (broadcastEliminatedResult.isErr()) {
+        logger.info("Failed to broadcast eliminated result.");
+        return ack(ackErr("UNEXPECTED"));
+      }
       await broadcastClientState(newState, io);
       return ack(ackOk());
     });
@@ -634,6 +674,40 @@ const randomProblem = (exclude?: Set<string>): [string, string] => {
     ([q, _]) => exclude?.has(q) || true,
   );
   return remainingQuestions[randomInt(0, remainingQuestions.length - 1)];
+};
+
+const broadcastEliminated = (
+  room: ServerState,
+  io: IoServer,
+  target: SocketId,
+) => {
+  if (!room.isPlaying) {
+    return err("Room is not playing.");
+  }
+
+  const role = room.game.roles[target];
+  if (!role) {
+    return err("Cannot find target's role.");
+  }
+
+  if (role === "master") {
+    return err("Target is master.");
+  }
+
+  const hint = room.game.hints.find((h) => h.hinter === target)?.hint;
+
+  if (!hint) {
+    return err("Cannot find target's hint.");
+  }
+
+  logger.info("Eliminated State is broadcasted");
+  io.to(room.id).emit("game:eliminated", {
+    socketId: target,
+    hint,
+    role,
+  });
+
+  return ok();
 };
 
 const broadcastClientState = (

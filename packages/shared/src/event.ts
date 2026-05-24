@@ -1,11 +1,20 @@
 import { RoomId, SocketId } from "./domain";
-import { ClientState } from "./io";
+import { ClientState, Role } from "./io";
 
 export type ServerToClientEvents = {
   "room:chat": (chat: Chat) => void;
   "room:sync": (state: ClientState) => void;
   "game:error": (reason: string) => void;
+  // an event emits when someone is eliminated
+  // this is event used to provide visual feedback to client without headache room:sync
+  "game:eliminated": (detail: EliminatedDetail) => void;
 };
+
+export interface EliminatedDetail {
+  socketId: SocketId;
+  hint: string;
+  role: Exclude<Role, "master">;
+}
 
 export interface Chat {
   message: string;
@@ -81,7 +90,9 @@ export type HintError =
   | UnexpectedError
   | AckError<"NOT_HINTER">
   | AckError<"NOT_YOUR_TURN">
-  | AckError<"ANSWER">;
+  | AckError<"ANSWER">
+  | AckError<"ANSWER_CONTAINS">
+  | AckError<"ANSWER_REQUIRED">;
 
 export type AnswerError =
   | UnexpectedError
