@@ -1,18 +1,19 @@
 import pino from "pino";
+import { prettyFactory } from "pino-pretty";
 
-let hooks: pino.LoggerOptions["hooks"] | undefined;
-
-if (process.env.NODE_ENV === "test") {
-  const { prettyFactory } = require("pino-pretty");
-  const prettify = prettyFactory({ sync: true, colorize: true });
-  hooks = {
-    streamWrite: (s) => {
-      console.log(prettify(s)); // Mirror to console.log during tests
-      return s;
-    },
-  };
-}
-
+const isTest = process.env.NODE_ENV === "test";
+// let hooks: pino.LoggerOptions["hooks"] | undefined;
+//
+// if () {
+//   const prettify = prettyFactory({ sync: true, colorize: true });
+//   hooks = {
+//     streamWrite: (s) => {
+//       console.log(prettify(s)); // Mirror to console.log during tests
+//       return s;
+//     },
+//   };
+// }
+//
 export const logger = pino({
   level: process.env.LOG_LEVEL || "info",
   // ...(process.env.NODE_ENV === "test" && { sync: true }),
@@ -36,5 +37,18 @@ export const logger = pino({
   //       }
   //     : undefined,
   //
-  hooks,
+  //
+  ...(isTest && {
+    hooks: {
+      streamWrite: (s) => {
+        const prettify = prettyFactory({
+          sync: true,
+          colorize: true,
+        });
+
+        console.log(prettify(s));
+        return s;
+      },
+    },
+  }),
 });
