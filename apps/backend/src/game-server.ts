@@ -700,7 +700,7 @@ const broadcastEliminated = (
     return err("Cannot find target's hint.");
   }
 
-  logger.info("Eliminated State is broadcasted");
+  logger.info("Eliminated State is broadcasted")
   io.to(room.id).emit("game:eliminated", {
     socketId: target,
     hint,
@@ -796,15 +796,15 @@ const makeGameClientState = (
         ...rest,
       };
     }
-    default: {
-      return {
-        question,
-        role: undefined,
-        roles,
-        eliminated: [...eliminated],
-        ...rest,
-      };
-    }
+    // default: {
+    //   return {
+    //     question,
+    //     role: undefined,
+    //     roles,
+    //     eliminated: [...eliminated],
+    //     ...rest,
+    //   };
+    // }
   }
 };
 

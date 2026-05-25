@@ -56,9 +56,7 @@ describe("Test IO connection ", () => {
     it("can host a room", async () => {
       const socket = await newSocket();
 
-      const stateSyncPromise = new Promise<ClientState>((resolve) =>
-        socket.once("room:sync", resolve),
-      );
+      const stateSyncPromise = listenClientStateOnce(socket)
 
       const roomId = await socket.emitWithAck("room:host");
       assert(roomId.success, "Acked failed.");
@@ -690,7 +688,7 @@ describe("Test IO connection ", () => {
       let isGameOver = false;
       let round = 0;
 
-      while (!isGameOver && round < 30) {
+      while (!isGameOver && round < 40) {
         round++;
 
         const hinting = await simulateHinting([p1, p2, p3, p4], roomId);

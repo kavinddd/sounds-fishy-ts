@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { makeInjectIoServerMiddleware } from "../middleware";
 import { IoServer } from "../../src/game-server";
-import { logger } from "../telemetry";
 
 type GameRouteEnv = {
   Variables: { io: IoServer };
