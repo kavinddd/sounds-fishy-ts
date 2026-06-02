@@ -6,6 +6,7 @@ import {
   ackOk,
   ClientGameState,
   ClientState,
+  GameEndDetail,
   IoServer,
   Role,
   RoomId,
@@ -15,7 +16,7 @@ import {
   SocketId,
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
-import { err, ok, okAsync, ResultAsync } from "neverthrow";
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { rooms, sockets } from "./store";
 import { randomInt } from "crypto";
 
@@ -533,7 +534,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
       await rooms.set(room.id, newState);
 
       // Add current round to history for game-ending check
-      const currentRoundEntry = {
+      const currentRoundHistory = {
         round: room.game.round,
         eliminated: room.game.eliminated,
         roles: room.game.roles,
@@ -544,7 +545,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
         question: room.game.question,
         hints: room.game.hints,
       };
-      newState.game.roundHistory.push(currentRoundEntry);
+      // const prevRoundHistory = newState.game.roundHistory.filter(r => r.round !== room.game.round)
+      // newState.game.roundHistory = [...prevRoundHistory, currentRoundHistory]
+      newState.game.roundHistory.push(currentRoundHistory)
 
       const isRoundEnding = eliminatedRole === "blue" || isAllRedFishEliminated;
       const masters = new Set<SocketId>(
@@ -581,6 +584,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
         }
         await rooms.set(room.id, endGameState);
         await broadcastClientState(endGameState, io);
+        await broadcastGameEndState(room, io);
+
+
         return ack(ackOk());
       }
 
@@ -598,7 +604,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
           newState.game.roundHistory.map((round) => round.master),
         );
 
-        logger.info(
+        logger.debug(
           `masters: ${JSON.stringify([...masters])}, activePlayers: ${JSON.stringify(newState.players.filter((p) => !newState.game.eliminated.has(p)))}`,
         );
         const roles = assignRolesToPlayers(newState.players, masters);
@@ -626,14 +632,14 @@ const attachIoServerEventListeners = (io: IoServer) => {
         logger.info(
           `Round transition: clearing hints. nextRoundState hints length: ${nextRoundState.game.hints.length}`,
         );
-        logger.info(
+        logger.debug(
           `nextRoundState round: ${nextRoundState.game.round}, roles: ${JSON.stringify(roles)}`,
         );
         await rooms.set(room.id, nextRoundState);
-        const verify = await rooms.get(room.id);
-        if (verify.isOk() && verify.value.isPlaying) {
-          logger.info(`Verified stored round: ${verify.value.game.round}`);
-        }
+        // const verify = await rooms.get(room.id);
+        // if (verify.isOk() && verify.value.isPlaying) {
+        //   logger.info(`Verified stored round: ${verify.value.game.round}`);
+        // }
 
         const broadcastEliminatedResult = broadcastEliminated(
           room,
@@ -709,6 +715,32 @@ const broadcastEliminated = (
 
   return ok();
 };
+
+const broadcastGameEndState = (room: ServerState, io: IoServer): Result<void, string> => {
+
+  return makeGameEndState(room).map((detail) => {
+      io.in(room.id).emit("game:end", detail)
+    }
+  )
+}
+
+const makeGameEndState = (room: ServerState): Result<GameEndDetail, string> => {
+
+  if (!room.isPlaying) {
+    return err("Failed to broadcast game state, due to the room did not start.")
+  }
+
+  const { game } = room
+  // turn score to array, with descending by score
+  const sortedScores = (Object.entries(game.currentScore ) as [SocketId, number][]).sort((([, a], [, b]) => b - a))
+
+  return ok({
+    finalScore: game.currentScore,
+    winner: sortedScores[0][0],
+    firstRunner: sortedScores[1][0],
+    secondRunner: sortedScores[2][0],
+  })
+}
 
 const broadcastClientState = (
   room: ServerState,

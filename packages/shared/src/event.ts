@@ -8,12 +8,20 @@ export type ServerToClientEvents = {
   // an event emits when someone is eliminated
   // this is event used to provide visual feedback to client without headache room:sync
   "game:eliminated": (detail: EliminatedDetail) => void;
+  "game:end": (detail: GameEndDetail) => void
 };
 
 export interface EliminatedDetail {
   socketId: SocketId;
   hint: string;
   role: Exclude<Role, "master">;
+}
+
+export interface GameEndDetail {
+  finalScore: Record<SocketId, number>,
+  winner: SocketId,
+  firstRunner: SocketId,
+  secondRunner: SocketId,
 }
 
 export interface Chat {

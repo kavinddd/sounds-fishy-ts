@@ -16,6 +16,7 @@ import {
   ClientState,
   EliminatedDetail,
   EliminateError,
+  GameEndDetail,
   HintError,
   HostError,
   JoinError,
@@ -687,6 +688,7 @@ describe("Test IO connection ", () => {
       // 3. loop until all red fish eliminated
       let isGameOver = false;
       let round = 0;
+      const gameEndPromises: Promise<GameEndDetail[]>[] = []
 
       while (!isGameOver && round < 40) {
         round++;
@@ -720,6 +722,8 @@ describe("Test IO connection ", () => {
           p3,
           p4,
         ]);
+        gameEndPromises.push(listenMultipleGameEndOnce([p1, p2, p3, p4]))
+
         const eliminating = await master.emitWithAck(
           "game:eliminate",
           red.id as SocketId,
@@ -739,6 +743,7 @@ describe("Test IO connection ", () => {
         isGameOver = !serverState.isPlaying;
       }
 
+      await expect(Promise.any(gameEndPromises)).resolves.toBeDefined();
       expect(isGameOver).toBeTruthy();
     });
 
@@ -756,7 +761,10 @@ describe("Test IO connection ", () => {
       // 3. loop until all red fish eliminated
       let isGameOver = false;
       let round = 0;
-      while (!isGameOver && round < 10) {
+
+      const gameEndPromises: Promise<GameEndDetail[]>[] = [];
+
+      while (!isGameOver && round < 20) {
         round++;
 
         const hinting = await simulateHinting([p1, p2, p3], roomId);
@@ -784,6 +792,9 @@ describe("Test IO connection ", () => {
           p2,
           p3,
         ]);
+        gameEndPromises.push(listenMultipleGameEndOnce([p1, p2, p3]))
+
+
         const eliminating = await master.emitWithAck(
           "game:eliminate",
           red.id as SocketId,
@@ -796,12 +807,16 @@ describe("Test IO connection ", () => {
         isGameOver = !serverState.isPlaying;
 
         const eliminatedStates = await eliminateStatesPromise;
+        if (serverState.isPlaying) {
+          console.log(serverState.game.roundHistory)
+        }
         expect(eliminatedStates.length).eq(3);
         expect(new Set(eliminatedStates.map((s) => s.hint)).size).eq(1);
         expect(new Set(eliminatedStates.map((s) => s.role)).size).eq(1);
         expect(new Set(eliminatedStates.map((s) => s.socketId)).size).eq(1);
       }
 
+      await expect(Promise.any(gameEndPromises)).resolves.toBeDefined();
       expect(isGameOver).toBeTruthy();
     });
   });
@@ -856,7 +871,16 @@ const listenMultipleEliminatedOnce = (
 ): Promise<EliminatedDetail[]> =>
   Promise.all(sockets.map(listenEliminatedOnce));
 
-const timeoutSeconds = 3;
+const listenGameEndOnce = (
+  socket: ClientSocket,
+): Promise<GameEndDetail> => listenEventOnce(socket, "game:end");
+
+const listenMultipleGameEndOnce = (
+  sockets: ClientSocket[],
+): Promise<GameEndDetail[]> =>
+  Promise.all(sockets.map(listenGameEndOnce));
+
+const timeoutSeconds = 2;
 const listenEventOnce = <EventType extends keyof ServerToClientEvents>(
   socket: ClientSocket,
   event: EventType,
