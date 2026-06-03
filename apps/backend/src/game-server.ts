@@ -267,7 +267,7 @@ const attachIoServerEventListeners = (io: IoServer) => {
         return ack(ackErr("NOT_ENOUGH"));
       }
 
-      const roles = assignRolesToPlayers(room.players, new Set());
+      const roles = assignRolesToPlayers(room.players, new Set([]));
 
       const master = Object.entries(roles).find(
         ([_, role]) => role === "master",
@@ -545,9 +545,8 @@ const attachIoServerEventListeners = (io: IoServer) => {
         question: room.game.question,
         hints: room.game.hints,
       };
-      // const prevRoundHistory = newState.game.roundHistory.filter(r => r.round !== room.game.round)
-      // newState.game.roundHistory = [...prevRoundHistory, currentRoundHistory]
-      newState.game.roundHistory.push(currentRoundHistory)
+      const prevRoundHistory = newState.game.roundHistory.filter(r => r.round !== room.game.round)
+      newState.game.roundHistory = [...prevRoundHistory, currentRoundHistory]
 
       const isRoundEnding = eliminatedRole === "blue" || isAllRedFishEliminated;
       const masters = new Set<SocketId>(
@@ -677,7 +676,7 @@ const questions: Array<[string, string]> = [
 
 const randomProblem = (exclude?: Set<string>): [string, string] => {
   const remainingQuestions = questions.filter(
-    ([q, _]) => exclude?.has(q) || true,
+    ([q, _]) => !exclude?.has(q),
   );
   return remainingQuestions[randomInt(0, remainingQuestions.length - 1)];
 };
@@ -840,7 +839,7 @@ const makeGameClientState = (
   }
 };
 
-const calcScore = (
+export const calcScore = (
   players: SocketId[],
   rounds: Round[],
 ): Record<SocketId, number> => {
@@ -874,10 +873,16 @@ const calcScore = (
   return result;
 };
 
-const assignRolesToPlayers = (
+export const assignRolesToPlayers = (
   players: SocketId[],
   nonMasters?: Set<SocketId>,
 ): Record<SocketId, Role> => {
+
+  if (nonMasters && players.every(p => nonMasters.has(p))) {
+    logger.error("Failed to assign roles to players, all players are non-masters")
+    throw new Error("Failed to assign roles to players, all players are non-masters");
+  }
+
   const pool: Role[] = ["master", "blue"];
 
   for (let i = 0; i < players.length - 2; i++) {
@@ -887,15 +892,25 @@ const assignRolesToPlayers = (
   const result: Record<SocketId, Role> = {};
   const assignedIndices = new Set<number>();
 
-  players.forEach((p) => {
+  // Roles will be allocated for non-master first
+  const canBeMasterPlayers = !nonMasters ? players : players.filter(p => !nonMasters.has(p))
+  const sortedPlayers = !nonMasters ? players : [...nonMasters, ...canBeMasterPlayers]
+
+  sortedPlayers.forEach((p) => {
+    const canBeMaster = !nonMasters?.has(p)
     const availableIndices: number[] = [];
     pool.forEach((_, i) => {
       if (!assignedIndices.has(i)) {
-        availableIndices.push(i);
+        const role = pool[i]
+        if (role !== "master" || canBeMaster) {
+          availableIndices.push(i);
+        }
       }
     });
 
     if (availableIndices.length === 0) {
+      console.log(`no available roles in pool: ${players} ----- ${[...nonMasters ?? []]}`)
+      console.log(`assignedIncides: ${[...assignedIndices]}`)
       throw new Error("No available roles in pool");
     }
 
