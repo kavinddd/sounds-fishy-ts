@@ -46,9 +46,11 @@ export type ServerGameState = BaseGameState & {
   answer: string;
   questionHistory: Set<string>;
   roles: Record<SocketId, Role>;
-  roundHistory: Round[];
+  roundHistory: Round[]; // n round = n players
 };
 
+// each round = one player being a master
+// once everyone is master, the game should be ended, no more round.
 export type Round = {
   round: number;
   question: string;

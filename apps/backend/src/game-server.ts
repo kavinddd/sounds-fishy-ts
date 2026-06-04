@@ -545,8 +545,10 @@ const attachIoServerEventListeners = (io: IoServer) => {
         question: room.game.question,
         hints: room.game.hints,
       };
-      const prevRoundHistory = newState.game.roundHistory.filter(r => r.round !== room.game.round)
-      newState.game.roundHistory = [...prevRoundHistory, currentRoundHistory]
+      const prevRoundHistory = newState.game.roundHistory.filter(
+        (r) => r.round !== room.game.round,
+      );
+      newState.game.roundHistory = [...prevRoundHistory, currentRoundHistory];
 
       const isRoundEnding = eliminatedRole === "blue" || isAllRedFishEliminated;
       const masters = new Set<SocketId>(
@@ -584,7 +586,6 @@ const attachIoServerEventListeners = (io: IoServer) => {
         await rooms.set(room.id, endGameState);
         await broadcastClientState(endGameState, io);
         await broadcastGameEndState(room, io);
-
 
         return ack(ackOk());
       }
@@ -675,9 +676,7 @@ const questions: Array<[string, string]> = [
 ];
 
 const randomProblem = (exclude?: Set<string>): [string, string] => {
-  const remainingQuestions = questions.filter(
-    ([q, _]) => !exclude?.has(q),
-  );
+  const remainingQuestions = questions.filter(([q, _]) => !exclude?.has(q));
   return remainingQuestions[randomInt(0, remainingQuestions.length - 1)];
 };
 
@@ -705,7 +704,7 @@ const broadcastEliminated = (
     return err("Cannot find target's hint.");
   }
 
-  logger.info("Eliminated State is broadcasted")
+  logger.info("Eliminated State is broadcasted");
   io.to(room.id).emit("game:eliminated", {
     socketId: target,
     hint,
@@ -715,31 +714,35 @@ const broadcastEliminated = (
   return ok();
 };
 
-const broadcastGameEndState = (room: ServerState, io: IoServer): Result<void, string> => {
-
+const broadcastGameEndState = (
+  room: ServerState,
+  io: IoServer,
+): Result<void, string> => {
   return makeGameEndState(room).map((detail) => {
-      io.in(room.id).emit("game:end", detail)
-    }
-  )
-}
+    io.in(room.id).emit("game:end", detail);
+  });
+};
 
 const makeGameEndState = (room: ServerState): Result<GameEndDetail, string> => {
-
   if (!room.isPlaying) {
-    return err("Failed to broadcast game state, due to the room did not start.")
+    return err(
+      "Failed to broadcast game state, due to the room did not start.",
+    );
   }
 
-  const { game } = room
+  const { game } = room;
   // turn score to array, with descending by score
-  const sortedScores = (Object.entries(game.currentScore ) as [SocketId, number][]).sort((([, a], [, b]) => b - a))
+  const sortedScores = (
+    Object.entries(game.currentScore) as [SocketId, number][]
+  ).sort(([, a], [, b]) => b - a);
 
   return ok({
     finalScore: game.currentScore,
     winner: sortedScores[0][0],
     firstRunner: sortedScores[1][0],
     secondRunner: sortedScores[2][0],
-  })
-}
+  });
+};
 
 const broadcastClientState = (
   room: ServerState,
@@ -843,30 +846,30 @@ export const calcScore = (
   players: SocketId[],
   rounds: Round[],
 ): Record<SocketId, number> => {
+  const minBlueFishScore = 2;
   const result: Record<SocketId, number> = {};
-  players.forEach((pId) => (result[pId] = 0));
 
+  players.forEach((p) => (result[p] = 0));
   rounds.forEach((round) => {
     const isMasterWin = !round.eliminated.has(round.blueFish);
     if (isMasterWin) {
       result[round.master] =
         (result[round.master] ?? 0) + round.eliminated.size;
-      return;
     }
 
     const isBlueFishWin = round.eliminated.has(round.blueFish);
     if (isBlueFishWin) {
       result[round.blueFish] =
-        result[round.blueFish] ?? 0 + Math.max(2, round.eliminated.size - 1);
-      return;
+        (result[round.blueFish] ?? 0) +
+        Math.max(minBlueFishScore, round.eliminated.size - 1);
     }
 
-    const survivedRedFishIds = players.filter((p) => {
-      return !round.eliminated.has(p) && round.roles[p] === "red";
-    });
+    const survivedRedFishIds = players.filter(
+      (p) => round.roles[p] === "red" && !round.eliminated.has(p),
+    );
 
-    survivedRedFishIds.forEach((id) => {
-      result[id] = (result[id] ?? 0) + 2;
+    survivedRedFishIds.forEach((red) => {
+      result[red] = (result[red] ?? 0) + 1;
     });
   });
 
@@ -877,10 +880,13 @@ export const assignRolesToPlayers = (
   players: SocketId[],
   nonMasters?: Set<SocketId>,
 ): Record<SocketId, Role> => {
-
-  if (nonMasters && players.every(p => nonMasters.has(p))) {
-    logger.error("Failed to assign roles to players, all players are non-masters")
-    throw new Error("Failed to assign roles to players, all players are non-masters");
+  if (nonMasters && players.every((p) => nonMasters.has(p))) {
+    logger.error(
+      "Failed to assign roles to players, all players are non-masters",
+    );
+    throw new Error(
+      "Failed to assign roles to players, all players are non-masters",
+    );
   }
 
   const pool: Role[] = ["master", "blue"];
@@ -893,15 +899,19 @@ export const assignRolesToPlayers = (
   const assignedIndices = new Set<number>();
 
   // Roles will be allocated for non-master first
-  const canBeMasterPlayers = !nonMasters ? players : players.filter(p => !nonMasters.has(p))
-  const sortedPlayers = !nonMasters ? players : [...nonMasters, ...canBeMasterPlayers]
+  const canBeMasterPlayers = !nonMasters
+    ? players
+    : players.filter((p) => !nonMasters.has(p));
+  const sortedPlayers = !nonMasters
+    ? players
+    : [...nonMasters, ...canBeMasterPlayers];
 
   sortedPlayers.forEach((p) => {
-    const canBeMaster = !nonMasters?.has(p)
+    const canBeMaster = !nonMasters?.has(p);
     const availableIndices: number[] = [];
     pool.forEach((_, i) => {
       if (!assignedIndices.has(i)) {
-        const role = pool[i]
+        const role = pool[i];
         if (role !== "master" || canBeMaster) {
           availableIndices.push(i);
         }
@@ -909,8 +919,10 @@ export const assignRolesToPlayers = (
     });
 
     if (availableIndices.length === 0) {
-      console.log(`no available roles in pool: ${players} ----- ${[...nonMasters ?? []]}`)
-      console.log(`assignedIncides: ${[...assignedIndices]}`)
+      console.log(
+        `no available roles in pool: ${players} ----- ${[...(nonMasters ?? [])]}`,
+      );
+      console.log(`assignedIncides: ${[...assignedIndices]}`);
       throw new Error("No available roles in pool");
     }
 
