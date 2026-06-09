@@ -141,7 +141,7 @@ describe("scoring", () => {
   });
 
   describe("multiple rounds", () => {
-    it.only("4 people - eliminate blue only", () => {
+    it("4 people - eliminate blue only", () => {
       const players = ["1", "2", "3", "4"] as SocketId[];
 
       testMultipleRounds([
