@@ -8,6 +8,7 @@ import type {
   Chat,
   SocketId,
   EliminatedDetail,
+  GameEndDetail,
 } from "@sounds-fishy/shared";
 
 type SocketStatus = "idle" | "connecting" | "in-room" | "in-game" | "error";
@@ -22,6 +23,7 @@ interface SocketContextValue {
   error: string | null;
   isHost: boolean;
   eliminationDetail: EliminatedDetail | null;
+  gameEndDetail: GameEndDetail | null;
   gameState: ClientGameState | null;
   hostRoom: () => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
@@ -46,6 +48,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [eliminationDetail, setEliminationDetail] = useState<EliminatedDetail | null>(null);
+  const [gameEndDetail, setGameEndDetail] = useState<GameEndDetail | null>(null);
 
   const gameState = roomState?.isPlaying
     ? (roomState as ClientState & { isPlaying: true }).game
@@ -97,6 +100,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     newSocket.on("game:eliminated", (detail: EliminatedDetail) => {
       setEliminationDetail(detail);
+    });
+
+    newSocket.on("game:end", (detail: GameEndDetail) => {
+      setGameEndDetail(detail);
     });
 
     return () => {
@@ -215,6 +222,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         error,
         isHost,
         eliminationDetail,
+        gameEndDetail,
         gameState,
         hostRoom,
         joinRoom,
