@@ -4,7 +4,8 @@ import { Button } from "./Button";
 import { Bubbles } from "./Bubbles";
 import { ChatPanel } from "./ChatPanel";
 import { GameRulesDialog } from "./GameRulesDialog";
-import type { Role, HintHistory } from "@sounds-fishy/shared";
+import { EliminationDialog } from "./EliminationDialog";
+import type { Role, HintHistory, EliminatedDetail, SocketId } from "@sounds-fishy/shared";
 
 const DEV_MODE = import.meta.env.DEV;
 
@@ -54,9 +55,11 @@ export function GameView() {
     eliminate,
     leaveRoom,
     sendChat,
+    eliminationDetail,
   } = useSocket();
 
   const [hintInput, setHintInput] = useState("");
+  const [pendingElimination, setPendingElimination] = useState<EliminatedDetail | null>(null);
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -81,7 +84,7 @@ export function GameView() {
   const players = roomState?.players ?? [];
   const eliminated = gameState?.eliminated ?? [];
   const activePlayers = players.filter((p) => !eliminated.includes(p));
-  const isEliminated = eliminated.includes(playerId);
+  const isEliminated = playerId ? eliminated.includes(playerId as SocketId) : false;
 
   const myRole = useMemo(() => {
     if (!gameState || !playerId) return null;
@@ -97,6 +100,18 @@ export function GameView() {
 
   const isMyHintTurn =
     gameState?.status === "hint" && gameState.currentHinter === playerId;
+
+  useEffect(() => {
+    if (eliminationDetail) {
+      setPendingElimination(eliminationDetail);
+    }
+  }, [eliminationDetail]);
+
+  // useEffect(() => {
+  //   if (pendingElimination && gameState?.status !== "eliminate") {
+  //     setPendingElimination(null);
+  //   }
+  // }, [gameState?.status, pendingElimination]);
 
   useEffect(() => {
     if (isMyHintTurn && myRole === "blue" && answer) {
@@ -733,6 +748,15 @@ export function GameView() {
               </div>
             </div>
           </div>
+        )}
+
+        {pendingElimination && (
+          <EliminationDialog
+            detail={pendingElimination}
+            players={players}
+            currentPlayerId={playerId}
+            onDismiss={() => setPendingElimination(null)}
+          />
         )}
 
         <GameRulesDialog

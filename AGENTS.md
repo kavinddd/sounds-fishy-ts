@@ -207,6 +207,9 @@ See `packages/shared/src/io.ts` for type definitions.
 5. Always test with 3+ players for game flow verification
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Current plan: `specs/002-elimination-visual-feedback/plan.md`
+Implementation details: `specs/002-elimination-visual-feedback/quickstart.md`
+Data model: `specs/002-elimination-visual-feedback/data-model.md`
+Event contracts: `specs/002-elimination-visual-feedback/contracts/`
+Research: `specs/002-elimination-visual-feedback/research.md`
 <!-- SPECKIT END -->
