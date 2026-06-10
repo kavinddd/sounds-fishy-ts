@@ -16,7 +16,7 @@ import {
   SocketId,
 } from "@sounds-fishy/shared";
 import { logger } from "./telemetry";
-import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
+import { err, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { rooms, sockets } from "./store";
 import { randomInt } from "crypto";
 
@@ -586,6 +586,17 @@ const attachIoServerEventListeners = (io: IoServer) => {
         await rooms.set(room.id, endGameState);
         await broadcastClientState(endGameState, io);
         await broadcastGameEndState(room, io);
+
+        // Reset all socket states from "in-game" to "in-room"
+
+        await Promise.all(
+          room.players.map((socketId) =>
+            sockets.set(socketId, {
+              roomId: room.id,
+              status: "in-room",
+            }),
+          ),
+        );
 
         return ack(ackOk());
       }
