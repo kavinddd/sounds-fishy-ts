@@ -5,7 +5,12 @@ import { Bubbles } from "./Bubbles";
 import { ChatPanel } from "./ChatPanel";
 import { GameRulesDialog } from "./GameRulesDialog";
 import { EliminationDialog } from "./EliminationDialog";
-import type { Role, HintHistory, EliminatedDetail, SocketId } from "@sounds-fishy/shared";
+import type {
+  Role,
+  HintHistory,
+  EliminatedDetail,
+  SocketId,
+} from "@sounds-fishy/shared";
 
 const DEV_MODE = import.meta.env.DEV;
 
@@ -56,10 +61,12 @@ export function GameView() {
     leaveRoom,
     sendChat,
     eliminationDetail,
+    gameEndDetail,
   } = useSocket();
 
   const [hintInput, setHintInput] = useState("");
-  const [pendingElimination, setPendingElimination] = useState<EliminatedDetail | null>(null);
+  const [pendingElimination, setPendingElimination] =
+    useState<EliminatedDetail | null>(null);
   const [showDevInfo, setShowDevInfo] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -84,7 +91,9 @@ export function GameView() {
   const players = roomState?.players ?? [];
   const eliminated = gameState?.eliminated ?? [];
   const activePlayers = players.filter((p) => !eliminated.includes(p));
-  const isEliminated = playerId ? eliminated.includes(playerId as SocketId) : false;
+  const isEliminated = playerId
+    ? eliminated.includes(playerId as SocketId)
+    : false;
 
   const myRole = useMemo(() => {
     if (!gameState || !playerId) return null;
@@ -105,7 +114,7 @@ export function GameView() {
     if (eliminationDetail) {
       setPendingElimination(eliminationDetail);
     }
-  }, [eliminationDetail]);
+  }, [eliminationDetail, gameEndDetail]);
 
   // useEffect(() => {
   //   if (pendingElimination && gameState?.status !== "eliminate") {
@@ -350,22 +359,22 @@ export function GameView() {
               </div>
             </div>
 
-            {gameState?.hints && gameState.hints.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                <p className="text-xs text-yellow-600 font-semibold mb-2 uppercase">
-                  💡 Hints Shared
-                </p>
-                <div className="space-y-2">
-                  {gameState.hints.map((hint, index) => (
-                    <div key={index} className="bg-white rounded-lg p-2">
-                      <span className="text-yellow-600">"</span>
-                      <span className="text-text font-medium">{hint.hint}</span>
-                      <span className="text-yellow-600">"</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* {gameState?.hints && gameState.hints.length > 0 && ( */}
+            {/*   <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4"> */}
+            {/*     <p className="text-xs text-yellow-600 font-semibold mb-2 uppercase"> */}
+            {/*       💡 Hints Shared */}
+            {/*     </p> */}
+            {/*     <div className="space-y-2"> */}
+            {/*       {gameState.hints.map((hint, index) => ( */}
+            {/*         <div key={index} className="bg-white rounded-lg p-2"> */}
+            {/*           <span className="text-yellow-600">"</span> */}
+            {/*           <span className="text-text font-medium">{hint.hint}</span> */}
+            {/*           <span className="text-yellow-600">"</span> */}
+            {/*         </div> */}
+            {/*       ))} */}
+            {/*     </div> */}
+            {/*   </div> */}
+            {/* )} */}
 
             {isEliminated && (
               <div className="text-center py-8">
