@@ -73,6 +73,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setRoomId(null);
       setRoomState(null);
       setChats([]);
+      setGameEndDetail(null);
+      setEliminationDetail(null);
     });
 
     newSocket.on("connect_error", () => {
@@ -85,6 +87,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setRoomState(state);
       if (state.isPlaying) {
         setStatus("in-game");
+        setGameEndDetail(null);
+        setEliminationDetail(null);
       } else {
         setStatus("in-room");
       }
@@ -155,6 +159,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       setRoomState(null);
       setStatus("idle");
       setChats([]);
+      setGameEndDetail(null);
+      setEliminationDetail(null);
     }
   };
 
