@@ -57,7 +57,7 @@ describe("Test IO connection ", () => {
     it("can host a room", async () => {
       const socket = await newSocket();
 
-      const stateSyncPromise = listenClientStateOnce(socket)
+      const stateSyncPromise = listenClientStateOnce(socket);
 
       const roomId = await socket.emitWithAck("room:host");
       assert(roomId.success, "Acked failed.");
@@ -688,7 +688,7 @@ describe("Test IO connection ", () => {
       // 3. loop until all red fish eliminated
       let isGameOver = false;
       let round = 0;
-      const gameEndPromises: Promise<GameEndDetail[]>[] = []
+      const gameEndPromises: Promise<GameEndDetail[]>[] = [];
 
       while (!isGameOver && round < 40) {
         round++;
@@ -722,7 +722,7 @@ describe("Test IO connection ", () => {
           p3,
           p4,
         ]);
-        gameEndPromises.push(listenMultipleGameEndOnce([p1, p2, p3, p4]))
+        gameEndPromises.push(listenMultipleGameEndOnce([p1, p2, p3, p4]));
 
         const eliminating = await master.emitWithAck(
           "game:eliminate",
@@ -742,6 +742,14 @@ describe("Test IO connection ", () => {
 
         isGameOver = !serverState.isPlaying;
       }
+
+      const gameEndDetails = await Promise.any(gameEndPromises);
+
+      gameEndDetails.forEach(({ finalScore }) => {
+        expect(
+          Object.values(finalScore).every((score) => score === 2),
+        ).toBeTruthy();
+      });
 
       await expect(Promise.any(gameEndPromises)).resolves.toBeDefined();
       expect(isGameOver).toBeTruthy();
@@ -792,8 +800,7 @@ describe("Test IO connection ", () => {
           p2,
           p3,
         ]);
-        gameEndPromises.push(listenMultipleGameEndOnce([p1, p2, p3]))
-
+        gameEndPromises.push(listenMultipleGameEndOnce([p1, p2, p3]));
 
         const eliminating = await master.emitWithAck(
           "game:eliminate",
@@ -808,7 +815,7 @@ describe("Test IO connection ", () => {
 
         const eliminatedStates = await eliminateStatesPromise;
         if (serverState.isPlaying) {
-          console.log(serverState.game.roundHistory)
+          console.log(serverState.game.roundHistory);
         }
         expect(eliminatedStates.length).eq(3);
         expect(new Set(eliminatedStates.map((s) => s.hint)).size).eq(1);
@@ -871,14 +878,12 @@ const listenMultipleEliminatedOnce = (
 ): Promise<EliminatedDetail[]> =>
   Promise.all(sockets.map(listenEliminatedOnce));
 
-const listenGameEndOnce = (
-  socket: ClientSocket,
-): Promise<GameEndDetail> => listenEventOnce(socket, "game:end");
+const listenGameEndOnce = (socket: ClientSocket): Promise<GameEndDetail> =>
+  listenEventOnce(socket, "game:end");
 
 const listenMultipleGameEndOnce = (
   sockets: ClientSocket[],
-): Promise<GameEndDetail[]> =>
-  Promise.all(sockets.map(listenGameEndOnce));
+): Promise<GameEndDetail[]> => Promise.all(sockets.map(listenGameEndOnce));
 
 const timeoutSeconds = 2;
 const listenEventOnce = <EventType extends keyof ServerToClientEvents>(

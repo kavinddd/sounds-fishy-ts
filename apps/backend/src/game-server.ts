@@ -520,20 +520,6 @@ const attachIoServerEventListeners = (io: IoServer) => {
         eliminatedSocketIds.has(id),
       );
 
-      const newState: ServerState = {
-        ...room,
-        game: {
-          ...room.game,
-          eliminated: eliminatedSocketIds,
-          currentScore: calcScore(room.players, room.game.roundHistory),
-          hints: [],
-          status: "eliminate",
-        },
-      };
-
-      await rooms.set(room.id, newState);
-
-      // Add current round to history for game-ending check
       const currentRoundHistory = {
         round: room.game.round,
         eliminated: room.game.eliminated,
@@ -545,10 +531,25 @@ const attachIoServerEventListeners = (io: IoServer) => {
         question: room.game.question,
         hints: room.game.hints,
       };
-      const prevRoundHistory = newState.game.roundHistory.filter(
+      const prevRoundHistory = room.game.roundHistory.filter(
         (r) => r.round !== room.game.round,
       );
-      newState.game.roundHistory = [...prevRoundHistory, currentRoundHistory];
+      const roundHistory = [...prevRoundHistory, currentRoundHistory];
+
+      const newState: ServerState = {
+        ...room,
+        game: {
+          ...room.game,
+          eliminated: eliminatedSocketIds,
+          hints: [],
+          status: "eliminate",
+          roundHistory,
+          currentScore: calcScore(room.players, roundHistory),
+        },
+      };
+      logger.debug(`after cal: ${JSON.stringify(newState.game.currentScore)}`);
+
+      await rooms.set(room.id, newState);
 
       const isRoundEnding = eliminatedRole === "blue" || isAllRedFishEliminated;
       const masters = new Set<SocketId>(
@@ -585,10 +586,9 @@ const attachIoServerEventListeners = (io: IoServer) => {
         }
         await rooms.set(room.id, endGameState);
         await broadcastClientState(endGameState, io);
-        await broadcastGameEndState(room, io);
+        broadcastGameEndState(newState, io);
 
         // Reset all socket states from "in-game" to "in-room"
-
         await Promise.all(
           room.players.map((socketId) =>
             sockets.set(socketId, {
@@ -715,12 +715,13 @@ const broadcastEliminated = (
     return err("Cannot find target's hint.");
   }
 
-  logger.info("Eliminated State is broadcasted");
   io.to(room.id).emit("game:eliminated", {
     socketId: target,
     hint,
     role,
   });
+
+  logger.debug("Eliminated state is broadcasted");
 
   return ok();
 };
@@ -731,10 +732,12 @@ const broadcastGameEndState = (
 ): Result<void, string> => {
   return makeGameEndState(room).map((detail) => {
     io.in(room.id).emit("game:end", detail);
+    logger.debug("GameEnd state is broadcasted.");
   });
 };
 
 const makeGameEndState = (room: ServerState): Result<GameEndDetail, string> => {
+  logger.debug("makeGameEndState");
   if (!room.isPlaying) {
     return err(
       "Failed to broadcast game state, due to the room did not start.",
@@ -742,6 +745,9 @@ const makeGameEndState = (room: ServerState): Result<GameEndDetail, string> => {
   }
 
   const { game } = room;
+  logger.debug(
+    `current score make game end state: ${JSON.stringify(game.currentScore)}`,
+  );
   // turn score to array, with descending by score
   const sortedScores = (
     Object.entries(game.currentScore) as [SocketId, number][]
@@ -753,6 +759,11 @@ const makeGameEndState = (room: ServerState): Result<GameEndDetail, string> => {
     firstRunner: sortedScores[1][0],
     secondRunner: sortedScores[2][0],
   });
+};
+
+const debugRound = (round: Round): void => {
+  logger.debug(`Round: ${round.round}`);
+  logger.debug(`Eliminated: ${[...round.eliminated]}`);
 };
 
 const broadcastClientState = (
@@ -860,15 +871,24 @@ export const calcScore = (
   const minBlueFishScore = 2;
   const result: Record<SocketId, number> = {};
 
+  console.log(
+    JSON.stringify(
+      rounds.map((r) => ({ ...r, eliminated: [...r.eliminated] })),
+    ),
+  );
+  console.log("to");
   players.forEach((p) => (result[p] = 0));
   rounds.forEach((round) => {
-    const isMasterWin = !round.eliminated.has(round.blueFish);
+    const isMasterWin =
+      round.eliminated.size && !round.eliminated.has(round.blueFish);
     if (isMasterWin) {
       result[round.master] =
         (result[round.master] ?? 0) + round.eliminated.size;
     }
 
-    const isBlueFishWin = round.eliminated.has(round.blueFish);
+    const isBlueFishWin =
+      round.eliminated.size && round.eliminated.has(round.blueFish);
+
     if (isBlueFishWin) {
       result[round.blueFish] =
         (result[round.blueFish] ?? 0) +
@@ -883,6 +903,8 @@ export const calcScore = (
       result[red] = (result[red] ?? 0) + 1;
     });
   });
+
+  console.log(JSON.stringify(result));
 
   return result;
 };
