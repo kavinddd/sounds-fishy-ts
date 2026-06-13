@@ -114,7 +114,7 @@ export function GameView() {
     if (eliminationDetail) {
       setPendingElimination(eliminationDetail);
     }
-  }, [eliminationDetail, gameEndDetail]);
+  }, [eliminationDetail]);
 
   // useEffect(() => {
   //   if (pendingElimination && gameState?.status !== "eliminate") {
