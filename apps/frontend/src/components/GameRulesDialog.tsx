@@ -17,10 +17,7 @@ export function GameRulesDialog({ isOpen, onClose }: GameRulesDialogProps) {
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-surface">
           <h2 className="text-lg font-bold text-text">How to Play</h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-background rounded"
-          >
+          <button onClick={onClose} className="p-1 hover:bg-background rounded">
             ✕
           </button>
         </div>
@@ -30,16 +27,16 @@ export function GameRulesDialog({ isOpen, onClose }: GameRulesDialogProps) {
             <h3 className="font-semibold text-text mb-2">Roles</h3>
             <ul className="space-y-2 text-sm text-text-light">
               <li>
-                <span className="font-medium text-text">🎯 Master:</span> Knows the
-                secret word, runs the game
+                <span className="font-medium text-text">🎯 Master:</span> Guess
+                the secret word, runs the game
               </li>
               <li>
-                <span className="font-medium text-text">🐟 Blue Fish:</span> Knows
-                the word, must help master (say the answer)
+                <span className="font-medium text-text">🐟 Blue Fish:</span>{" "}
+                Knows the word, cannot lie, must get yourself eliminated
               </li>
               <li>
                 <span className="font-medium text-text">🐠 Red Fish:</span>
-                Doesn&apos;t know the word, tries to guess
+                Know the word, lie lie lie, don't get eliminated!
               </li>
             </ul>
           </section>
@@ -48,16 +45,16 @@ export function GameRulesDialog({ isOpen, onClose }: GameRulesDialogProps) {
             <h3 className="font-semibold text-text mb-2">Scoring</h3>
             <ul className="space-y-2 text-sm text-text-light">
               <li>
-                <span className="font-medium text-text">Master wins</span> (blue
-                eliminated): Master gets +1 per eliminated
+                <span className="font-medium text-text">Master</span>
+                +1 per eliminated red fish, +0 if you eliminate blue fish
               </li>
               <li>
-                <span className="font-medium text-text">Blue wins</span> (all red
-                eliminated): Blue gets +2
+                <span className="font-medium text-text">Blue</span>
+                +2 if you are eliminated
               </li>
               <li>
-                <span className="font-medium text-text">All red survive:</span>{" "}
-                Each surviving red gets +2
+                <span className="font-medium text-text">Red</span> +1 if you are
+                surviving
               </li>
             </ul>
           </section>
@@ -65,8 +62,7 @@ export function GameRulesDialog({ isOpen, onClose }: GameRulesDialogProps) {
           <section>
             <h3 className="font-semibold text-text mb-2">Game End</h3>
             <p className="text-sm text-text-light">
-              The game ends when every player has been Master once. Everyone will
-              be Master exactly once.
+              Everyone will be a master once, only once.
             </p>
           </section>
         </div>
@@ -74,3 +70,4 @@ export function GameRulesDialog({ isOpen, onClose }: GameRulesDialogProps) {
     </div>
   );
 }
+
