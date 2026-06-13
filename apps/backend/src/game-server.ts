@@ -871,12 +871,6 @@ export const calcScore = (
   const minBlueFishScore = 2;
   const result: Record<SocketId, number> = {};
 
-  console.log(
-    JSON.stringify(
-      rounds.map((r) => ({ ...r, eliminated: [...r.eliminated] })),
-    ),
-  );
-  console.log("to");
   players.forEach((p) => (result[p] = 0));
   rounds.forEach((round) => {
     const isMasterWin =
@@ -903,8 +897,6 @@ export const calcScore = (
       result[red] = (result[red] ?? 0) + 1;
     });
   });
-
-  console.log(JSON.stringify(result));
 
   return result;
 };
@@ -952,10 +944,6 @@ export const assignRolesToPlayers = (
     });
 
     if (availableIndices.length === 0) {
-      console.log(
-        `no available roles in pool: ${players} ----- ${[...(nonMasters ?? [])]}`,
-      );
-      console.log(`assignedIncides: ${[...assignedIndices]}`);
       throw new Error("No available roles in pool");
     }
 

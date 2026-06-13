@@ -44,7 +44,7 @@ interface StartupParam {
 export const startup = ({ port }: StartupParam) => {
   const app = makeApp();
   app.use("*", loggerMiddleware());
-  console.log(`Server running on http://localhost:${port}`);
+  logger.info(`Server is running on http://localhost:${port}`);
 
   const server = serve({ fetch: app.fetch, port: port });
   const ioServer = mountIoServer(server);

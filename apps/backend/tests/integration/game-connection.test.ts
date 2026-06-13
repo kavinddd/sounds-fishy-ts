@@ -814,9 +814,6 @@ describe("Test IO connection ", () => {
         isGameOver = !serverState.isPlaying;
 
         const eliminatedStates = await eliminateStatesPromise;
-        if (serverState.isPlaying) {
-          console.log(serverState.game.roundHistory);
-        }
         expect(eliminatedStates.length).eq(3);
         expect(new Set(eliminatedStates.map((s) => s.hint)).size).eq(1);
         expect(new Set(eliminatedStates.map((s) => s.role)).size).eq(1);
